@@ -179,5 +179,39 @@ rep(
   1
 );
 
+/* ---- 11. Purchase entry: create a brand-new item inline ---- */
+rep(
+  `    '<div class="f"><label>Item</label><select id="pu_i">'+opt(DB.stockItems,'','id','name')+'</select></div>'+`,
+  `    '<div class="f"><label>Item</label><select id="pu_i" onchange="puNewItem()">'+opt(DB.stockItems,'','id','name')+'<option value="__new">＋ New item — type the name below</option></select></div>'+
+    '<div class="f" id="pu_ni_f" style="display:none"><label>New item name</label><input type="text" id="pu_ni" placeholder="e.g. Tab Paracetamol 500mg"></div>'+
+    '<div class="f" id="pu_nu_f" style="display:none"><label>Unit (strip / bottle / no)</label><input type="text" id="pu_nu" value="no"></div>'+`,
+  1
+);
+rep(
+  `  $('#pu_ok').onclick=()=>{
+    const itemId=$('#pu_i').value,q=R($('#pu_q').value),a=R($('#pu_a').value),d=$('#pu_d').value;`,
+  `  $('#pu_ok').onclick=()=>{
+    let itemId=$('#pu_i').value;
+    if(itemId==='__new'){
+      const nm=String($('#pu_ni').value||'').trim();
+      if(!nm){toast('Type the new item name first','warn');return;}
+      const o={id:uid(),name:nm,cat:'Medicines',unit:String($('#pu_nu').value||'').trim()||'no',rate:0,min:2,opening:0};
+      DB.stockItems.push(o);itemId=o.id;
+    }
+    const q=R($('#pu_q').value),a=R($('#pu_a').value),d=$('#pu_d').value;`,
+  1
+);
+rep(
+  "function purchaseForm(){",
+  `function puNewItem(){
+  const nw=$('#pu_i').value==='__new';
+  $('#pu_ni_f').style.display=nw?'':'none';
+  $('#pu_nu_f').style.display=nw?'':'none';
+  if(nw)setTimeout(function(){var e=$('#pu_ni');if(e)e.focus();},50);
+}
+function purchaseForm(){`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

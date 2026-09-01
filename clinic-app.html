@@ -1471,12 +1471,20 @@ function moveForm(itemId,type){
       ($('#mv_n').value?' — '+$('#mv_n').value:''),R(q*(it.rate||0)),itemId);
     save();closeModal();refresh();toast('Saved','ok');};
 }
+function puNewItem(){
+  const nw=$('#pu_i').value==='__new';
+  $('#pu_ni_f').style.display=nw?'':'none';
+  $('#pu_nu_f').style.display=nw?'':'none';
+  if(nw)setTimeout(function(){var e=$('#pu_ni');if(e)e.focus();},50);
+}
 function purchaseForm(){
   modal('Purchase entry','<div class="grid g2">'+
     '<div class="f"><label>Date</label><input type="date" id="pu_d" value="'+today()+'"></div>'+
     '<div class="f"><label>Supplier</label><input type="text" id="pu_v" list="vlist2" placeholder="Supplier name"><datalist id="vlist2">'+
       DB.vendors.map(v=>'<option value="'+esc(v.name)+'">').join('')+'</datalist></div>'+
-    '<div class="f"><label>Item</label><select id="pu_i">'+opt(DB.stockItems,'','id','name')+'</select></div>'+
+    '<div class="f"><label>Item</label><select id="pu_i" onchange="puNewItem()">'+opt(DB.stockItems,'','id','name')+'<option value="__new">＋ New item — type the name below</option></select></div>'+
+    '<div class="f" id="pu_ni_f" style="display:none"><label>New item name</label><input type="text" id="pu_ni" placeholder="e.g. Tab Paracetamol 500mg"></div>'+
+    '<div class="f" id="pu_nu_f" style="display:none"><label>Unit (strip / bottle / no)</label><input type="text" id="pu_nu" value="no"></div>'+
     '<div class="f"><label>Quantity</label><input type="number" id="pu_q" value="1"></div>'+
     '<div class="f"><label>Total amount ₹</label><input type="number" id="pu_a" placeholder="what you actually paid"></div>'+
     '<div class="f"><label>Paid by</label><select id="pu_m">'+opt(MODES,'UPI')+'</select></div>'+
@@ -1484,7 +1492,14 @@ function purchaseForm(){
     '</div><div class="hint">This creates the stock entry <b>and</b> the expense entry together — you only type it once.</div>',
     '<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn gold" id="pu_ok">Save purchase</button>');
   $('#pu_ok').onclick=()=>{
-    const itemId=$('#pu_i').value,q=R($('#pu_q').value),a=R($('#pu_a').value),d=$('#pu_d').value;
+    let itemId=$('#pu_i').value;
+    if(itemId==='__new'){
+      const nm=String($('#pu_ni').value||'').trim();
+      if(!nm){toast('Type the new item name first','warn');return;}
+      const o={id:uid(),name:nm,cat:'Medicines',unit:String($('#pu_nu').value||'').trim()||'no',rate:0,min:2,opening:0};
+      DB.stockItems.push(o);itemId=o.id;
+    }
+    const q=R($('#pu_q').value),a=R($('#pu_a').value),d=$('#pu_d').value;
     if(!itemId||!q||!a){toast('Item, quantity and amount are needed','warn');return;}
     const it=DB.stockItems.find(i=>i.id===itemId);
     const v=$('#pu_v').value.trim();

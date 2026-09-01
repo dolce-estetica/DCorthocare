@@ -1,0 +1,24 @@
+{
+  "name": "dc-ortho-care",
+  "version": "4.1.0",
+  "private": true,
+  "description": "DC Ortho Care — clinic books & billing (Next.js)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "next": "^15.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.6",
+    "@types/react": "19.2.18",
+    "typescript": "5.8.2"
+  }
+}

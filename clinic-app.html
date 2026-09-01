@@ -1060,8 +1060,10 @@ function saveBill(doPrint){
     if(V){V.status='billed';V.billId=docs[0].id;V.billNo=docs[0].no;}}
   /* medicines handed over come out of stock too */
   CART.lines.forEach(l=>{if(l.medItemId){const it=DB.stockItems.find(i=>i.id===l.medItemId);
-    if(it)DB.stockMoves.push({id:uid(),date:CART.date,itemId:it.id,type:'out',qty:l.qty,rate:it.rate||0,
-      ref:'Bill '+docs[0].no,note:'dispensed',auto:true,billId:docs[0].id});}});
+    if(it){const have=stockQty(it.id),q=Math.min(l.qty,Math.max(0,have));
+      if(q<l.qty)toast('Only '+Math.max(0,have)+' of '+it.name+' in stock — issued '+q+' to this bill','warn');
+      if(q>0)DB.stockMoves.push({id:uid(),date:CART.date,itemId:it.id,type:'out',qty:q,rate:it.rate||0,
+        ref:'Bill '+docs[0].no,note:'dispensed',auto:true,billId:docs[0].id});}}});
   /* auto-issue stock from the service → item recipe */
   const used=[];
   CART.lines.forEach(l=>{const s=svcById(l.sid);
@@ -1147,6 +1149,8 @@ function collect(id){
   const b=DB.bills.find(x=>x.id===id),due=billDue(b);
   modal('Collect payment — '+b.no,
     '<div class="alert i" style="margin-bottom:14px"><span>●</span><div><b>'+esc(b.pname)+'</b> · bill '+money(b.net)+' · already paid '+money(billPaid(b))+'<br><b>Balance '+money(due)+'</b></div></div>'+
+    ((b.payments&&b.payments.length)?'<div class="f" style="margin-bottom:12px"><label>Payments already on this bill</label>'+
+      b.payments.map((p,i)=>'<div class="tot"><span>'+esc(p.mode)+' · '+dmy(p.d)+(p.ref?' · <span style="font-size:11.5px;color:var(--ink3)">'+esc(p.ref)+'</span>':'')+'</span><span><b>'+money(p.amt)+'</b> '+(isOwner()?'<span style="cursor:pointer;color:var(--bad)" onclick="delPay(\''+b.id+'\','+i+')">✕</span>':'')+'</span></div>').join('')+'</div>':'')+
     '<div class="grid g2"><div class="f"><label>Amount</label><input type="number" id="cp_a" value="'+due+'"></div>'+
     '<div class="f"><label>Mode</label><select id="cp_m">'+opt(MODES)+'</select></div>'+
     '<div class="f"><label>Date</label><input type="date" id="cp_d" value="'+today()+'"></div>'+
@@ -1400,7 +1404,61 @@ VIEWS.stock=function(){
    '<div class="card pad"><h3>Movement — where every unit went</h3>'+
      tableOf(['Date','Item','In/Out','Qty','Reason'],moves.map(m=>{const i=DB.stockItems.find(x=>x.id===m.itemId)||{};
        return[dmy(m.date),esc(i.name||'?'),m.type==='in'?'<span class="chip ok">IN</span>':(m.type==='out'?'<span class="chip warn">OUT</span>':'<span class="chip">ADJ</span>'),
-       m.qty,(m.auto?'<span class="chip info">auto</span> ':'')+esc(m.ref||m.note||'')];}),'No movement yet')+'</div></div>';
+       m.qty,(m.auto?'<span class="chip info">auto</span> ':'')+esc(m.ref||m.note||'')+(isOwner()?' <button class="btn sm ghost" onclick="delMove(\''+m.id+'\')">✕</button>':'')];}),'No movement yet')+'</div></div>';
+  }else if(t==='pl'){
+    const plp=VIEWS.stock.plp||'month';
+    const fyr=fyRange(DB.settings.fy);
+    const rng=plp==='month'?[today().slice(0,8)+'01',today()]:(plp==='fy'?[fyr[0],fyr[1]]:['2000-01-01',today()]);
+    const inR=d=>d>=rng[0]&&d<=rng[1];
+    const mv=DB.stockMoves.filter(m=>inR(m.date));
+    const inQ={},inC={},soldQ={},soldC={},outQ={},outC={};
+    mv.forEach(m=>{
+      if(m.type==='in'){inQ[m.itemId]=(inQ[m.itemId]||0)+m.qty;inC[m.itemId]=(inC[m.itemId]||0)+m.qty*(m.rate||0);}
+      else if(m.type==='out'){
+        if(m.billId){soldQ[m.itemId]=(soldQ[m.itemId]||0)+m.qty;soldC[m.itemId]=(soldC[m.itemId]||0)+m.qty*(m.rate||0);}
+        else{outQ[m.itemId]=(outQ[m.itemId]||0)+m.qty;outC[m.itemId]=(outC[m.itemId]||0)+m.qty*(m.rate||0);}}});
+    const rev={};
+    billsIn(rng[0],rng[1]).forEach(b=>{
+      (b.lines||[]).forEach(l=>{
+        if(l.medItemId){rev[l.medItemId]=(rev[l.medItemId]||0)+(l.amt||0);return;}
+        const s=svcById(l.sid);
+        if(s&&s.cat==='Goods & Appliances'){
+          const rc=(s.consumes||[]).filter(c=>c.itemId);
+          if(rc.length===1){rev[rc[0].itemId]=(rev[rc[0].itemId]||0)+(l.amt||0);}
+          else if(rc.length>1){rc.forEach(c=>{rev[c.itemId]=(rev[c.itemId]||0)+(l.amt||0)/rc.length;});}
+        }
+      });
+    });
+    const rows=items.map(i=>{
+      const sq=stockQty(i.id),r=R(rev[i.id]||0),c=R(soldC[i.id]||0);
+      return {i:i,sq:sq,pq:inQ[i.id]||0,pc:R(inC[i.id]||0),s2:soldQ[i.id]||0,c:c,r:r,pl:R(r-c),oq:outQ[i.id]||0,oc:R(outC[i.id]||0)};});
+    const tPc=R(sum(rows,r=>r.pc)),tSc=R(sum(rows,r=>r.c)),tR=R(sum(rows,r=>r.r)),tOc=R(sum(rows,r=>r.oc)),tPl=R(tR-tSc);
+    const tPq=R(sum(rows,r=>r.pq)),tSq=R(sum(rows,r=>r.s2)),tOq=R(sum(rows,r=>r.oq));
+    body='<div class="filterbar">'+
+      [['month','This month'],['fy','This FY'],['all','All time']].map(x=>'<span class="pill'+(plp===x[0]?' on':'')+'" onclick="VIEWS.stock.plp=\''+x[0]+'\';refresh()">'+x[1]+'</span>').join('')+'</div>'+
+     '<div class="grid g4" style="margin-bottom:14px">'+
+      '<div class="kpi"><div class="l">Purchases (period)</div><div class="v">'+money0(tPc)+'</div><div class="d">'+tPq+' units purchased</div></div>'+
+      '<div class="kpi"><div class="l">Sales — pharmacy &amp; goods</div><div class="v">'+money0(tR)+'</div><div class="d">charged on bills in period</div></div>'+
+      '<div class="kpi"><div class="l">Cost of sales</div><div class="v">'+money0(tSc)+'</div><div class="d">'+tSq+' units issued to bills</div></div>'+
+      '<div class="kpi acc"><div class="l">Stock P&amp;L</div><div class="v" style="color:'+(tPl>=0?'var(--ok)':'var(--bad)')+'">'+money0(tPl)+'</div><div class="d">sales − cost of sales</div></div>'+
+     '</div>'+
+     '<div class="grid g2" style="margin-bottom:14px">'+
+      '<div class="kpi"><div class="l">Wastage / other issues</div><div class="v">'+money0(tOc)+'</div><div class="d">'+tOq+' units · never sold</div></div>'+
+      '<div class="kpi"><div class="l">Closing stock value</div><div class="v">'+money0(val)+'</div><div class="d">at last purchase rate</div></div>'+
+     '</div>'+
+     '<div class="card pad"><h3>Item-wise — '+esc(rng[0])+' to '+esc(rng[1])+'</h3>'+
+     '<div class="tw"><table><thead><tr><th>Item</th><th class="num">Purchased</th><th class="num">Cost ₹</th><th class="num">Sold / given</th><th class="num">Sales ₹</th><th class="num">Cost of sales ₹</th><th class="num">P&amp;L ₹</th><th class="num">Other out</th><th class="num">In stock</th></tr></thead><tbody>'+
+     rows.map(r=>'<tr><td><b>'+esc(r.i.name)+'</b><div class="hint">'+esc(r.i.cat||'')+'</div></td>'+
+       '<td class="num">'+r.pq+'</td><td class="num">'+money0(r.pc)+'</td>'+
+       '<td class="num">'+r.s2+'</td><td class="num">'+money0(r.r)+'</td><td class="num">'+money0(r.c)+'</td>'+
+       '<td class="num"><b style="color:'+((r.r||r.c)?(r.pl>=0?'var(--ok)':'var(--bad)'):'var(--ink3)')+'">'+((r.r||r.c)?money0(r.pl):'—')+'</b></td>'+
+       '<td class="num">'+(r.oq?(r.oq+' <span class="chip warn">waste</span>'):'—')+'</td>'+
+       '<td class="num"><b'+(r.sq<0?' style="color:var(--bad)"':'')+'>'+r.sq+'</b> '+esc(r.i.unit||'')+'</td></tr>').join('')+
+     '<tr><td><b>Total</b></td><td class="num">'+tPq+'</td><td class="num"><b>'+money0(tPc)+'</b></td><td class="num">'+tSq+'</td>'+
+       '<td class="num"><b>'+money0(tR)+'</b></td><td class="num"><b>'+money0(tSc)+'</b></td><td class="num"><b style="color:'+(tPl>=0?'var(--ok)':'var(--bad)')+'">'+money0(tPl)+'</b></td>'+
+       '<td class="num">'+tOq+'</td><td></td></tr>'+
+     '</tbody></table></div>'+
+     '<div class="hint" style="margin-top:8px">Sales = dispensed medicines and rate-card goods charged on bills in the period. Consumables used inside procedures (PRP kits, plasters, syringes) show <b>cost only</b> — their income is part of the procedure price, so their P&amp;L column stays “—”. Dispensed medicines are billed at cost + 20% unless the front desk edits the rate.</div></div>';
   }else{
     body='<div class="alert '+(unlinked.length?'w':'s')+'"><span>●</span><div>'+
       (unlinked.length?'<b>'+unlinked.length+' item'+(unlinked.length>1?'s are':' is')+' not linked to any service</b> — '+esc(unlinked.map(i=>i.name).join(', '))+
@@ -1422,9 +1480,32 @@ VIEWS.stock=function(){
     (isOwner()?'<button class="btn ghost" onclick="itemForm()">＋ New item</button>':'')+
     '<button class="btn ghost" onclick="exportStock()">⤓ Excel</button>',
   html:'<div class="alert i"><span>●</span><div>The tax rules specifically ask a doctor to keep an <b>inventory of drugs and consumables</b>. You never subtract anything by hand: <b>billing a service pulls its items out of stock by itself</b>. You only enter what you <b>buy</b>. Wastage and expiry are the only manual entries.</div></div>'+
-   '<div class="tabs">'+[['stock','Stock &amp; movement'],['recipe','What each service consumes']]
+   '<div class="tabs">'+[['stock','Stock &amp; movement'],['pl','Pharmacy &amp; stock P&amp;L'],['recipe','What each service consumes']]
      .map(x=>'<div class="tab'+(t===x[0]?' on':'')+'" onclick="VIEWS.stock.t=\''+x[0]+'\';refresh()">'+x[1]+'</div>').join('')+'</div>'+body};
 };
+function delMove(id){
+  if(!isOwner()){toast('Only the owner can remove entries','bad');return;}
+  const m=DB.stockMoves.find(x=>x.id===id);if(!m)return;
+  const it=DB.stockItems.find(i=>i.id===m.itemId)||{};
+  confirmBox('Remove this stock entry?',
+    '<b>'+esc(it.name||'Item')+'</b> · '+(m.type==='in'?'IN':'OUT')+' '+m.qty+' on '+dmy(m.date)+(m.ref?' — '+esc(m.ref):'')+
+    '<br><br>Removing an <b>IN</b> entry reduces stock (a purchase taken back). Removing an <b>OUT</b> entry puts stock back. The removal is recorded in Staff Activity.'+
+    (m.billId?'<br><br><b>Tip:</b> this entry was created by a bill — cancelling the bill (Bills &amp; Dues → ✕) is the cleaner way; bill and stock then stay in step.':''),
+    ()=>{DB.stockMoves=DB.stockMoves.filter(x=>x.id!==id);
+      logAct('delete','stock','Removed stock entry: '+(m.type==='in'?'IN':'OUT')+' '+m.qty+' × '+(it.name||'?')+(m.ref?' — '+m.ref:''),R((m.qty||0)*(m.rate||0)),m.id);
+      save();refresh();toast('Stock entry removed','warn');},'Remove',true);
+}
+function delPay(billId,i){
+  if(!isOwner()){toast('Only the owner can remove entries','bad');return;}
+  const b=DB.bills.find(x=>x.id===billId);if(!b||!b.payments||!b.payments[i])return;
+  const p=b.payments[i];
+  confirmBox('Remove this payment?',
+    esc(b.pname)+' · bill '+esc(b.no)+'<br>'+esc(p.mode)+' <b>'+money(p.amt)+'</b> on '+dmy(p.d)+
+    '<br><br>The bill goes back to <b>due</b> by that amount. The removal is recorded in Staff Activity.',
+    ()=>{b.payments.splice(i,1);
+      logAct('delete','payment','Removed payment '+money(p.amt)+' ('+p.mode+') from '+b.no+' — '+b.pname,p.amt,b.id);
+      save();closeModal();refresh();toast('Payment removed','warn');},'Remove',true);
+}
 function recipeForm(sid){
   const s=svcById(sid);
   const rows=()=>(s.consumes||[]).map((c,i)=>'<div class="row" style="margin-bottom:7px">'+
@@ -1877,13 +1958,37 @@ function drawRx(){
     '<td style="width:19%"><input type="text" value="'+esc(m.dose)+'" placeholder="1-0-1" oninput="rxSet('+i+',\'dose\',this.value)"></td>'+
     '<td style="width:13%"><input type="number" value="'+m.days+'" placeholder="days" oninput="rxSet('+i+',\'days\',+this.value)"></td>'+
     '<td style="width:13%"><input type="number" value="'+m.qty+'" placeholder="qty" oninput="rxSet('+i+',\'qty\',+this.value)"></td>'+
-    '<td style="width:17%;font-size:11.5px"><label style="margin:0;font-weight:600"><input type="checkbox" style="width:auto"'+(m.dispense?' checked':'')+' onchange="rxSet('+i+',\'dispense\',this.checked)"> Give from clinic</label></td>'+
+    '<td style="width:17%;font-size:11.5px"><label style="margin:0;font-weight:600"><input type="checkbox" style="width:auto"'+(m.dispense?' checked':'')+' onchange="rxSet('+i+',\'dispense\',this.checked)"> Give from clinic</label>'+
+    (function(){const it=DB.stockItems.find(function(x){return x.id===m.itemId;})||DB.stockItems.find(function(x){return x.name&&x.name.toLowerCase()===String(m.name||'').toLowerCase();});
+      if(!it)return '';const q=stockQty(it.id);
+      return '<div style="margin-top:2px;font-weight:700;font-size:11px;color:'+(q>0?'var(--ok)':'var(--bad)')+'">'+(q>0?(q+' '+esc(it.unit||'pcs')+' in stock'):'not in stock (0)')+'</div>';})()+'</td>'+
     '<td style="width:4%"><span style="cursor:pointer;color:var(--bad)" onclick="visitById(CV).meds.splice('+i+',1);save();drawRx()">✕</span></td></tr>').join('')+
     '<tr><td colspan="6"><datalist id="medlist">'+items.map(i=>'<option value="'+esc(i.name)+'">').join('')+'</datalist></td></tr>'
     :'<tr><td class="hint">No medicines written.</td></tr>';
 }
 function rxSet(i,k,val){const v=visitById(CV);v.meds[i][k]=val;
-  if(k==='name'){const it=DB.stockItems.find(x=>x.name.toLowerCase()===String(val).toLowerCase());v.meds[i].itemId=it?it.id:'';}
+  if(k==='name'){
+    const it=DB.stockItems.find(x=>x.name.toLowerCase()===String(val).toLowerCase());
+    if(it){
+      const q=stockQty(it.id);
+      if(q<=0){toast(it.name+' — not in stock ('+q+' '+(it.unit||'pcs')+' in clinic). Buy it first, or write it as an outside medicine.','bad');
+        v.meds[i].name='';v.meds[i].itemId='';save();drawRx();return;}
+      toast(it.name+': '+q+' '+(it.unit||'pcs')+' in stock','ok');
+    }
+    v.meds[i].itemId=it?it.id:'';
+  }
+  if(k==='qty'&&v.meds[i].dispense&&v.meds[i].itemId){
+    const it2=DB.stockItems.find(x=>x.id===v.meds[i].itemId);
+    if(it2){const q2=stockQty(it2.id);
+      if((+val||0)>q2){v.meds[i].qty=q2;save();drawRx();
+        toast('Only '+q2+' '+(it2.unit||'pcs')+' of '+it2.name+' in stock — quantity capped','warn');return;}}}
+  if(k==='dispense'&&val&&v.meds[i].itemId){
+    const it3=DB.stockItems.find(x=>x.id===v.meds[i].itemId);
+    if(it3){const q3=stockQty(it3.id);
+      if(q3<=0){v.meds[i].dispense=false;save();drawRx();
+        toast(it3.name+' — not in stock ('+q3+' in clinic). "Give from clinic" unticked.','bad');return;}
+      if((v.meds[i].qty||0)>q3){v.meds[i].qty=q3;save();drawRx();
+        toast('Only '+q3+' '+(it3.unit||'pcs')+' in stock — quantity capped','warn');return;}}}
   save();}
 function saveConsult(quiet){
   const v=visitById(CV);if(!v)return;

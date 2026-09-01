@@ -25,10 +25,11 @@ async function handleWrite(req: Request) {
 
   const row = await prisma.appState.findUnique({ where: { id: "clinic" } });
   if (row) {
-    /* a write without a version stamp comes from a stale/unknown client — refuse it */
+    /* a write without a version comes from an un-refreshed tab (old code) —
+       refuse it so it cannot erase newer entries; the tab must refresh once */
     if (!j.base) {
       return NextResponse.json(
-        { error: "Missing version — refresh the app.", doc: row.data, updatedAt: row.updatedAt.toISOString() },
+        { error: "Missing version — refresh the app once.", doc: row.data, updatedAt: row.updatedAt.toISOString() },
         { status: 409 }
       );
     }

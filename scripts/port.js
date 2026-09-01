@@ -460,5 +460,126 @@ rep(
   1
 );
 
+/* ---- 19. physio merge, salary & work type, payroll opt-out, days worked ---- */
+/* 19a. docForm: salary + work type + payroll fields */
+rep(
+  `    '<div class="f"><label>Status</label><select id="dc_a"><option value="1"'+(!d||d.active!==false?' selected':'')+'>Active</option><option value="0"'+(d&&d.active===false?' selected':'')+'>Inactive</option></select></div>'+
+    '</div>'+`,
+  `    '<div class="f"><label>Status</label><select id="dc_a"><option value="1"'+(!d||d.active!==false?' selected':'')+'>Active</option><option value="0"'+(d&&d.active===false?' selected':'')+'>Inactive</option></select></div>'+
+    '<div class="f"><label>Monthly salary ₹ (blank = not salaried)</label><input type="number" id="dc_sal" value="'+(d&&d.salary?d.salary:'')+'"></div>'+
+    '<div class="f"><label>Work type</label><select id="dc_wt"><option value="Full-time"'+(d&&d.workType==='Full-time'?' selected':'')+'>Full-time</option><option value="Part-time"'+(d&&d.workType==='Part-time'?' selected':'')+'>Part-time</option><option value="Selected days"'+(d&&d.workType==='Selected days'?' selected':'')+'>Selected days</option></select></div>'+
+    '<div class="f"><label><input type="checkbox" id="dc_pr" style="width:auto;margin-right:7px"'+(d&&d.payroll===false?'':' checked')+'> Include in salary payroll</label></div>'+
+    '</div>'+`,
+  1
+);
+rep(
+  `    const o={name:$('#dc_n').value.trim(),qual:$('#dc_q').value.trim(),regNo:$('#dc_r').value.trim(),
+      phone:$('#dc_p').value.trim(),spec:$('#dc_sp').value.trim(),active:$('#dc_a').value==='1',
+      kind:$('#dc_k')?$('#dc_k').value:K,
+      login:$('#dc_lg').value==='1',user:$('#dc_u').value.trim().toUpperCase(),pass:$('#dc_pw').value.trim(),perms:perms};`,
+  `    const o={name:$('#dc_n').value.trim(),qual:$('#dc_q').value.trim(),regNo:$('#dc_r').value.trim(),
+      phone:$('#dc_p').value.trim(),spec:$('#dc_sp').value.trim(),active:$('#dc_a').value==='1',
+      salary:R($('#dc_sal').value),workType:$('#dc_wt').value,payroll:$('#dc_pr').checked,
+      kind:$('#dc_k')?$('#dc_k').value:K,
+      login:$('#dc_lg').value==='1',user:$('#dc_u').value.trim().toUpperCase(),pass:$('#dc_pw').value.trim(),perms:perms};`,
+  1
+);
+/* 19b. staffForm: work type + payroll fields */
+rep(
+  `   '<div class="f"><label>Monthly salary ₹</label><input type="number" id="st_s" value="'+(s?s.salary:'')+'"></div>'+`,
+  `   '<div class="f"><label>Monthly salary ₹</label><input type="number" id="st_s" value="'+(s?s.salary:'')+'"></div>'+
+   '<div class="f"><label>Work type</label><select id="st_wt"><option value="Full-time"'+(s&&s.workType==='Full-time'?' selected':'')+'>Full-time</option><option value="Part-time"'+(s&&s.workType==='Part-time'?' selected':'')+'>Part-time</option><option value="Selected days"'+(s&&s.workType==='Selected days'?' selected':'')+'>Selected days</option></select></div>'+
+   '<div class="f"><label><input type="checkbox" id="st_pr" style="width:auto;margin-right:7px"'+(s&&s.payroll===false?'':' checked')+'> Include in salary payroll</label></div>'+`,
+  1
+);
+rep(
+  `    const o={name:$('#st_n').value.trim(),role:$('#st_r').value.trim(),
+      salary:R($('#st_s').value),phone:$('#st_p').value.trim(),joined:$('#st_j').value,
+      active:$('#st_a').value==='1',bank:$('#st_b').value.trim(),`,
+  `    const o={name:$('#st_n').value.trim(),role:$('#st_r').value.trim(),
+      salary:R($('#st_s').value),workType:$('#st_wt').value,payroll:$('#st_pr').checked,phone:$('#st_p').value.trim(),joined:$('#st_j').value,
+      active:$('#st_a').value==='1',bank:$('#st_b').value.trim(),`,
+  1
+);
+/* 19c. staffForm: a physiotherapist is merged into Doctors & Physios */
+rep(
+  `    if(s){Object.assign(s,o);logAct('edit','staff','Updated staff '+o.name,0,s.id);}
+    else{o.id=uid();DB.staff.push(o);logAct('create','staff','Added staff '+o.name,0,o.id);}
+    syncGateUser({name:o.name,user:o.user,pass:o.pass,login:o.login,active:o.active,role:'STAFF'});
+    save();closeModal();refresh();`,
+  `    if(o.role==='Physiotherapist'){
+      let doc=s?DB.doctors.find(x=>x.id===s.id):null;
+      if(!doc&&o.user)doc=DB.doctors.find(x=>x.login&&x.user===o.user);
+      const dd={name:o.name,phone:o.phone,active:o.active,salary:o.salary,workType:o.workType,payroll:o.payroll,
+        kind:'physio',login:o.login,user:o.user,pass:o.pass,spec:'Physiotherapy',
+        perms:Object.assign({},o.perms,{consult:true})};
+      if(doc)Object.assign(doc,dd);else{dd.id=s?s.id:uid();DB.doctors.push(dd);}
+      if(s)DB.staff=DB.staff.filter(x=>x.id!==s.id);
+      syncGateUser({name:dd.name,user:dd.user,pass:dd.pass,login:dd.login,active:dd.active,role:'PHYSIO'});
+      logAct(s?'edit':'create','doctor',(s?'Updated ':'Added ')+'physiotherapist '+o.name,0,doc?doc.id:dd.id);
+      save();closeModal();refresh();toast('Saved in Doctors & Physios','ok');return;
+    }
+    if(s){Object.assign(s,o);logAct('edit','staff','Updated staff '+o.name,0,s.id);}
+    else{o.id=uid();DB.staff.push(o);logAct('create','staff','Added staff '+o.name,0,o.id);}
+    syncGateUser({name:o.name,user:o.user,pass:o.pass,login:o.login,active:o.active,role:'STAFF'});
+    save();closeModal();refresh();`,
+  1
+);
+/* 19d. staff table: show work type & payroll opt-out */
+rep(
+  `      return '<tr><td><b>'+esc(s.name)+'</b><div class="hint">'+esc(s.phone||'')+'</div></td><td>'+esc(s.role||'')+'</td>'+
+      '<td class="num">'+money0(s.salary)+'</td>'+`,
+  `      return '<tr><td><b>'+esc(s.name)+'</b><div class="hint">'+esc(s.phone||'')+'</div></td><td>'+esc(s.role||'')+(s.workType?'<div class="hint">'+esc(s.workType)+'</div>':'')+'</td>'+
+      '<td class="num">'+money0(s.salary)+(s.payroll===false?' <span class="chip warn">not on payroll</span>':'')+'</td>'+`,
+  1
+);
+/* 19e. payroll: doctors included, opt-out respected, days worked */
+rep(
+  "function genPayrun(m){",
+  `function payPerson(id){return DB.staff.find(x=>x.id===id)||DB.doctors.find(x=>x.id===id)||{};}
+function payDays(m,i,v){const run=DB.payruns.find(p=>p.month===m);run.rows[i].days=R(v);save();}
+function genPayrun(m){`,
+  1
+);
+rep(
+  `  const rows=DB.staff.filter(s=>s.active!==false).map(s=>{
+    const old=run&&run.rows.find(r=>r.staffId===s.id);`,
+  `  const people=DB.staff.filter(s=>s.active!==false&&s.payroll!==false)
+    .concat(DB.doctors.filter(dc=>dc.active!==false&&!dc.isOwner&&dc.payroll!==false&&(dc.salary||0)>0));
+  const rows=people.map(s=>{
+    const old=run&&run.rows.find(r=>r.staffId===s.id);`,
+  1
+);
+rep(
+  `,s=DB.staff.find(x=>x.id===r.staffId);`,
+  `,s=payPerson(r.staffId);`,
+  2
+);
+rep(
+  `{if(r.paid)return;const s=DB.staff.find(x=>x.id===r.staffId);`,
+  `{if(r.paid)return;const s=payPerson(r.staffId);`,
+  1
+);
+rep(
+  `run.rows.forEach(r=>{const s=DB.staff.find(x=>x.id===r.staffId)||{};`,
+  `run.rows.forEach(r=>{const s=payPerson(r.staffId);`,
+  1
+);
+rep(
+  `    '<div class="tw"><table><thead><tr><th>Staff</th><th class="num">Salary</th><th class="num">Extra / bonus</th><th class="num">Advance</th><th class="num">Other deduction</th><th class="num">Prof. tax</th><th class="num">Net pay</th><th>Paid?</th><th></th></tr></thead><tbody>'+
+    run.rows.map((r,i)=>{const s=DB.staff.find(x=>x.id===r.staffId)||{};
+      return '<tr><td><b>'+esc(s.name||'?')+'</b><div class="hint">'+esc(s.role||'')+'</div></td>'+`,
+  `    '<div class="tw"><table><thead><tr><th>Staff</th><th class="num">Days worked</th><th class="num">Salary</th><th class="num">Extra / bonus</th><th class="num">Advance</th><th class="num">Other deduction</th><th class="num">Prof. tax</th><th class="num">Net pay</th><th>Paid?</th><th></th></tr></thead><tbody>'+
+    run.rows.map((r,i)=>{const s=payPerson(r.staffId);
+      return '<tr><td><b>'+esc(s.name||'?')+'</b><div class="hint">'+esc(s.role||'')+(s.workType?' · '+esc(s.workType):'')+'</div></td>'+
+      '<td class="num"><input type="number" min="0" max="31" value="'+(r.days!=null?r.days:'')+'" placeholder="—" style="width:60px;text-align:right;padding:4px 7px" onchange="payDays(\\''+m+'\\','+i+',this.value)"></td>'+`,
+  1
+);
+rep(
+  `    '<tr><td colspan="6" class="num"><b>TOTAL</b></td><td class="num"><b>'+money(sum(run.rows,r=>r.net))+'</b></td><td colspan="2"></td></tr>'+`,
+  `    '<tr><td colspan="7" class="num"><b>TOTAL</b></td><td class="num"><b>'+money(sum(run.rows,r=>r.net))+'</b></td><td colspan="2"></td></tr>'+`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

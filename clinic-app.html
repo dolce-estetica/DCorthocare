@@ -2099,6 +2099,9 @@ function docForm(id,kind){
     '<div class="f"><label>Phone</label><input type="tel" id="dc_p" value="'+esc(d?d.phone:'')+'"></div>'+
     '<div class="f"><label>Speciality / department</label><input type="text" id="dc_sp" value="'+esc(d?d.spec:'')+'" placeholder="'+(isPhys?'Physiotherapy':'Orthopaedics')+'"></div>'+
     '<div class="f"><label>Status</label><select id="dc_a"><option value="1"'+(!d||d.active!==false?' selected':'')+'>Active</option><option value="0"'+(d&&d.active===false?' selected':'')+'>Inactive</option></select></div>'+
+    '<div class="f"><label>Monthly salary ₹ (blank = not salaried)</label><input type="number" id="dc_sal" value="'+(d&&d.salary?d.salary:'')+'"></div>'+
+    '<div class="f"><label>Work type</label><select id="dc_wt"><option value="Full-time"'+(d&&d.workType==='Full-time'?' selected':'')+'>Full-time</option><option value="Part-time"'+(d&&d.workType==='Part-time'?' selected':'')+'>Part-time</option><option value="Selected days"'+(d&&d.workType==='Selected days'?' selected':'')+'>Selected days</option></select></div>'+
+    '<div class="f"><label><input type="checkbox" id="dc_pr" style="width:auto;margin-right:7px"'+(d&&d.payroll===false?'':' checked')+'> Include in salary payroll</label></div>'+
     '</div>'+
     '<div style="border-top:1px solid var(--line);margin:6px 0 14px"></div>'+
     '<h4 style="margin-bottom:8px">Sign-in</h4><div class="grid g3">'+
@@ -2114,6 +2117,7 @@ function docForm(id,kind){
     const perms={};$$('#mo .permgrid input').forEach(i=>perms[i.dataset.p]=i.checked);
     const o={name:$('#dc_n').value.trim(),qual:$('#dc_q').value.trim(),regNo:$('#dc_r').value.trim(),
       phone:$('#dc_p').value.trim(),spec:$('#dc_sp').value.trim(),active:$('#dc_a').value==='1',
+      salary:R($('#dc_sal').value),workType:$('#dc_wt').value,payroll:$('#dc_pr').checked,
       kind:$('#dc_k')?$('#dc_k').value:K,
       login:$('#dc_lg').value==='1',user:$('#dc_u').value.trim().toUpperCase(),pass:$('#dc_pw').value.trim(),perms:perms};
     if(!o.name){toast('Name needed','warn');return;}
@@ -2221,8 +2225,8 @@ VIEWS.staff=function(){
   '<div class="card pad sec"><h3>Staff &amp; what each of them can open</h3>'+
     (DB.staff.length?'<div class="tw"><table><thead><tr><th>Name</th><th>Role</th><th class="num">Salary</th><th>Can sign in</th><th>Access</th><th>Status</th><th></th></tr></thead><tbody>'+
     DB.staff.map(s=>{const on=Object.keys(s.perms||{}).filter(k=>s.perms[k]);
-      return '<tr><td><b>'+esc(s.name)+'</b><div class="hint">'+esc(s.phone||'')+'</div></td><td>'+esc(s.role||'')+'</td>'+
-      '<td class="num">'+money0(s.salary)+'</td>'+
+      return '<tr><td><b>'+esc(s.name)+'</b><div class="hint">'+esc(s.phone||'')+'</div></td><td>'+esc(s.role||'')+(s.workType?'<div class="hint">'+esc(s.workType)+'</div>':'')+'</td>'+
+      '<td class="num">'+money0(s.salary)+(s.payroll===false?' <span class="chip warn">not on payroll</span>':'')+'</td>'+
       '<td>'+(s.login?'<span class="chip ok">'+esc(s.user||'—')+'</span>':'<span class="chip">no login</span>')+'</td>'+
       '<td style="max-width:280px;font-size:12px">'+(!s.login?'<span class="hint" style="display:inline">— does not use the app —</span>'
         :(on.length?on.map(k=>'<span class="chip info" style="margin:1px 3px 1px 0">'+
@@ -2242,9 +2246,10 @@ VIEWS.staff=function(){
       '<td>'+(dc.active!==false?'<span class="chip ok">Active</span>':'<span class="chip">Inactive</span>')+'</td></tr>';}).join('')+
     '</tbody></table></div></div>'+
   (run?'<div class="card pad"><h3>Salary for '+mName(m)+'</h3>'+
-    '<div class="tw"><table><thead><tr><th>Staff</th><th class="num">Salary</th><th class="num">Extra / bonus</th><th class="num">Advance</th><th class="num">Other deduction</th><th class="num">Prof. tax</th><th class="num">Net pay</th><th>Paid?</th><th></th></tr></thead><tbody>'+
-    run.rows.map((r,i)=>{const s=DB.staff.find(x=>x.id===r.staffId)||{};
-      return '<tr><td><b>'+esc(s.name||'?')+'</b><div class="hint">'+esc(s.role||'')+'</div></td>'+
+    '<div class="tw"><table><thead><tr><th>Staff</th><th class="num">Days worked</th><th class="num">Salary</th><th class="num">Extra / bonus</th><th class="num">Advance</th><th class="num">Other deduction</th><th class="num">Prof. tax</th><th class="num">Net pay</th><th>Paid?</th><th></th></tr></thead><tbody>'+
+    run.rows.map((r,i)=>{const s=payPerson(r.staffId);
+      return '<tr><td><b>'+esc(s.name||'?')+'</b><div class="hint">'+esc(s.role||'')+(s.workType?' · '+esc(s.workType):'')+'</div></td>'+
+      '<td class="num"><input type="number" min="0" max="31" value="'+(r.days!=null?r.days:'')+'" placeholder="—" style="width:60px;text-align:right;padding:4px 7px" onchange="payDays(\''+m+'\','+i+',this.value)"></td>'+
       '<td class="num"><input type="number" value="'+r.base+'" style="width:92px;text-align:right;padding:4px 7px" onchange="payEdit(\''+m+'\','+i+',\'base\',this.value)"></td>'+
       '<td class="num"><input type="number" value="'+r.allow+'" style="width:82px;text-align:right;padding:4px 7px" onchange="payEdit(\''+m+'\','+i+',\'allow\',this.value)"></td>'+
       '<td class="num"><input type="number" value="'+r.advance+'" style="width:82px;text-align:right;padding:4px 7px" onchange="payEdit(\''+m+'\','+i+',\'advance\',this.value)"></td>'+
@@ -2253,7 +2258,7 @@ VIEWS.staff=function(){
       '<td class="num"><b>'+money(r.net)+'</b></td>'+
       '<td>'+(r.paid?'<span class="chip ok">'+dmy(r.date)+'</span>':'<button class="btn sm gold" onclick="payNow(\''+m+'\','+i+')">Pay</button>')+'</td>'+
       '<td><button class="btn sm ghost" onclick="printPayslip(\''+m+'\','+i+')">Slip</button></td></tr>';}).join('')+
-    '<tr><td colspan="6" class="num"><b>TOTAL</b></td><td class="num"><b>'+money(sum(run.rows,r=>r.net))+'</b></td><td colspan="2"></td></tr>'+
+    '<tr><td colspan="7" class="num"><b>TOTAL</b></td><td class="num"><b>'+money(sum(run.rows,r=>r.net))+'</b></td><td colspan="2"></td></tr>'+
     '</tbody></table></div>'+
     '<div class="row" style="margin-top:12px"><button class="btn" onclick="payAll(\''+m+'\')">Mark all paid &amp; post to books</button>'+
     '<button class="btn ghost" onclick="exportPayroll(\''+m+'\')">⤓ Salary register</button></div>'+
@@ -2267,6 +2272,8 @@ function staffForm(id){
    '<div class="f"><label>Name</label><input type="text" id="st_n" value="'+esc(s?s.name:'')+'"></div>'+
    '<div class="f"><label>Role</label><input type="text" id="st_r" value="'+esc(s?s.role:'')+'" list="rl" placeholder="Receptionist"><datalist id="rl"><option value="Receptionist"><option value="Clinic Manager"><option value="Physiotherapist"><option value="Nurse / Assistant"><option value="Housekeeping"></datalist></div>'+
    '<div class="f"><label>Monthly salary ₹</label><input type="number" id="st_s" value="'+(s?s.salary:'')+'"></div>'+
+   '<div class="f"><label>Work type</label><select id="st_wt"><option value="Full-time"'+(s&&s.workType==='Full-time'?' selected':'')+'>Full-time</option><option value="Part-time"'+(s&&s.workType==='Part-time'?' selected':'')+'>Part-time</option><option value="Selected days"'+(s&&s.workType==='Selected days'?' selected':'')+'>Selected days</option></select></div>'+
+   '<div class="f"><label><input type="checkbox" id="st_pr" style="width:auto;margin-right:7px"'+(s&&s.payroll===false?'':' checked')+'> Include in salary payroll</label></div>'+
    '<div class="f"><label>Phone</label><input type="tel" id="st_p" value="'+esc(s?s.phone:'')+'"></div>'+
    '<div class="f"><label>Joined on</label><input type="date" id="st_j" value="'+(s?s.joined:today())+'"></div>'+
    '<div class="f"><label>Status</label><select id="st_a"><option value="1"'+(!s||s.active!==false?' selected':'')+'>Active</option><option value="0"'+(s&&s.active===false?' selected':'')+'>Left</option></select></div>'+
@@ -2292,13 +2299,25 @@ function staffForm(id){
   $('#st_ok').onclick=()=>{
     const perms={};$$('#mo .permgrid input').forEach(i=>perms[i.dataset.p]=i.checked);
     const o={name:$('#st_n').value.trim(),role:$('#st_r').value.trim(),
-      salary:R($('#st_s').value),phone:$('#st_p').value.trim(),joined:$('#st_j').value,
+      salary:R($('#st_s').value),workType:$('#st_wt').value,payroll:$('#st_pr').checked,phone:$('#st_p').value.trim(),joined:$('#st_j').value,
       active:$('#st_a').value==='1',bank:$('#st_b').value.trim(),
       login:$('#st_lg').value==='1',user:$('#st_user').value.trim().toUpperCase(),
       pass:$('#st_pin').value.trim(),perms:perms};
     if(!o.name){toast('Name needed','warn');return;}
     if(o.login&&(!o.user||!o.pass)){toast('Username and password are both needed','warn');return;}
     if(o.login&&nameTaken(o.user,s&&s.id)){toast('That username is already used','bad');return;}
+    if(o.role==='Physiotherapist'){
+      let doc=s?DB.doctors.find(x=>x.id===s.id):null;
+      if(!doc&&o.user)doc=DB.doctors.find(x=>x.login&&x.user===o.user);
+      const dd={name:o.name,phone:o.phone,active:o.active,salary:o.salary,workType:o.workType,payroll:o.payroll,
+        kind:'physio',login:o.login,user:o.user,pass:o.pass,spec:'Physiotherapy',
+        perms:Object.assign({},o.perms,{consult:true})};
+      if(doc)Object.assign(doc,dd);else{dd.id=s?s.id:uid();DB.doctors.push(dd);}
+      if(s)DB.staff=DB.staff.filter(x=>x.id!==s.id);
+      syncGateUser({name:dd.name,user:dd.user,pass:dd.pass,login:dd.login,active:dd.active,role:'PHYSIO'});
+      logAct(s?'edit':'create','doctor',(s?'Updated ':'Added ')+'physiotherapist '+o.name,0,doc?doc.id:dd.id);
+      save();closeModal();refresh();toast('Saved in Doctors & Physios','ok');return;
+    }
     if(s){Object.assign(s,o);logAct('edit','staff','Updated staff '+o.name,0,s.id);}
     else{o.id=uid();DB.staff.push(o);logAct('create','staff','Added staff '+o.name,0,o.id);}
     syncGateUser({name:o.name,user:o.user,pass:o.pass,login:o.login,active:o.active,role:'STAFF'});
@@ -2310,9 +2329,13 @@ function permPreset(k){
     manager:{queue:1,bill:1,bills:1,patients:1,register:1,expenses:1,stock:1,project:1,assets:1,reports:1},none:{}};
   $$('#mo .permgrid input').forEach(i=>i.checked=!!sets[k][i.dataset.p]);
 }
+function payPerson(id){return DB.staff.find(x=>x.id===id)||DB.doctors.find(x=>x.id===id)||{};}
+function payDays(m,i,v){const run=DB.payruns.find(p=>p.month===m);run.rows[i].days=R(v);save();}
 function genPayrun(m){
   let run=DB.payruns.find(p=>p.month===m);
-  const rows=DB.staff.filter(s=>s.active!==false).map(s=>{
+  const people=DB.staff.filter(s=>s.active!==false&&s.payroll!==false)
+    .concat(DB.doctors.filter(dc=>dc.active!==false&&!dc.isOwner&&dc.payroll!==false&&(dc.salary||0)>0));
+  const rows=people.map(s=>{
     const old=run&&run.rows.find(r=>r.staffId===s.id);
     return old||{staffId:s.id,base:s.salary,allow:0,advance:0,deduct:0,pt:Math.round(ptFor(s.salary)/6),
       net:R(s.salary-Math.round(ptFor(s.salary)/6)),paid:false,mode:'Bank transfer',date:''};});
@@ -2323,7 +2346,7 @@ function genPayrun(m){
 function payEdit(m,i,k,v){const run=DB.payruns.find(p=>p.month===m);const r=run.rows[i];
   r[k]=R(v);r.net=R(r.base+r.allow-r.advance-r.deduct-r.pt);save();refresh();}
 function payNow(m,i){
-  const run=DB.payruns.find(p=>p.month===m),r=run.rows[i],s=DB.staff.find(x=>x.id===r.staffId);
+  const run=DB.payruns.find(p=>p.month===m),r=run.rows[i],s=payPerson(r.staffId);
   modal('Pay '+s.name,'<div class="grid g2">'+
     '<div class="f"><label>Amount</label><input type="number" id="pn_a" value="'+r.net+'" readonly></div>'+
     '<div class="f"><label>Mode</label><select id="pn_m">'+opt(MODES,'Bank transfer')+'</select></div>'+
@@ -2342,7 +2365,7 @@ function payNow(m,i){
 function payAll(m){
   const run=DB.payruns.find(p=>p.month===m);
   confirmBox('Mark all salaries paid?','This posts '+money(sum(run.rows.filter(r=>!r.paid),r=>r.net))+' to the expense book as bank transfers dated today.',()=>{
-    run.rows.forEach(r=>{if(r.paid)return;const s=DB.staff.find(x=>x.id===r.staffId);
+    run.rows.forEach(r=>{if(r.paid)return;const s=payPerson(r.staffId);
       r.paid=true;r.mode='Bank transfer';r.date=today();
       DB.expenses.push({id:uid(),vno:nextNo('VCH'),date:today(),amount:r.net,head:'Salaries — staff',
         desc:s.name+' — salary '+mName(m),vendor:s.name,mode:'Bank transfer',ref:'',billOnFile:true,capex:false,payrun:m});});
@@ -2353,13 +2376,13 @@ function exportPayroll(m){
   const run=DB.payruns.find(p=>p.month===m);
   const rows=[['SALARY REGISTER'],[DB.settings.clinicName],['Month',mName(m)],[],
     ['Name','Role','Salary','Extra/bonus','Advance','Other deduction','Professional tax','Net paid','Mode','Date']];
-  run.rows.forEach(r=>{const s=DB.staff.find(x=>x.id===r.staffId)||{};
+  run.rows.forEach(r=>{const s=payPerson(r.staffId);
     rows.push([s.name,s.role,r.base,r.allow,r.advance,r.deduct,r.pt,r.net,r.mode,dmy(r.date)]);});
   rows.push([],['','TOTAL','','','','','',sum(run.rows,r=>r.net)]);
   csv(rows,'DCOC_Salary_'+m+'.csv');
 }
 function printPayslip(m,i){
-  const run=DB.payruns.find(p=>p.month===m),r=run.rows[i],s=DB.staff.find(x=>x.id===r.staffId);
+  const run=DB.payruns.find(p=>p.month===m),r=run.rows[i],s=payPerson(r.staffId);
   printDoc('<div class="doc">'+docHead()+'<h2>Salary Slip — '+mName(m)+'</h2>'+
     '<table><tbody>'+
     '<tr><td>Employee</td><td><b>'+esc(s.name)+'</b></td></tr>'+

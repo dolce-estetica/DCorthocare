@@ -143,5 +143,12 @@ rep(
   1
 );
 
+/* ---- 8. sidebar footer text ---- */
+rep(
+  "Data stays in this browser.<br>Take a backup every Friday.",
+  "Data stored centrally · PostgreSQL.<br>Take a backup every Friday.",
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

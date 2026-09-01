@@ -59,8 +59,12 @@ browser ──> /clinic          the original app (clinic-app.html, auth-gated)
 - **State model:** the original app keeps everything in one in-memory `DB` object. The port
   syncs that document to the `AppState` table on every save (`save`/`saveNow`) and pulls it on
   boot. localStorage is kept as an offline cache; if the server can't be reached the app keeps
-  working and syncs automatically when it can. Writes are **last-write-wins** — avoid two people
-  editing at the exact same moment; the newest save replaces the older one.
+  working and syncs automatically when it can. Every push carries the version it was based on;
+  if another device saved newer data in between, the app runs a 3-way merge instead of
+  overwriting, so entries from both devices survive. Devices also poll every 30 s (and on
+  window focus), so new entries from one device appear on the others within about half a
+  minute — no manual refresh needed. Tabs running an old version of the app are refused by
+  the server until they refresh.
 - **Timezone:** all day/week/FY boundaries are computed in IST (`lib/format.ts`, `lib/period.ts`),
   independent of the server's timezone.
 

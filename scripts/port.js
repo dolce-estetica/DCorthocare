@@ -98,37 +98,128 @@ rep(
 );
 rep(
   "document.addEventListener('DOMContentLoaded',boot);",
-  `/* ===== server sync bridge (PostgreSQL) ===== */
+  `/* ===== server sync bridge (PostgreSQL, versioned 3-way merge) ===== */
 window.__CLOUD_READY__=false;window.__CLOUD_DIRTY__=false;
+window.__BASE__=null;window.__CLEAN__=null;window.__SERVER_EMPTY__=false;window.__CONFLICTS__=0;
 function cloudStatus(txt){const f=document.querySelector('#side .foot');if(f)f.innerHTML=txt;}
-function cloudPush(){
-  if(!window.__CLOUD_READY__){window.__CLOUD_DIRTY__=true;return;}
+function adopt(doc,updated){
+  DB=doc;migrate();
+  try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
+  window.__BASE__=updated||null;
+  window.__CLEAN__=JSON.stringify(DB);
+}
+/* three-way merge at array-item level: preserves both devices' work */
+function merge3(cleanStr,local,server){
+  const C=JSON.parse(cleanStr||'{}');
+  const out=JSON.parse(JSON.stringify(server));
+  ['patients','services','bills','expenses','vendors','stockItems','stockMoves','assets','staff','payruns','notes','log','doctors','visits'].forEach(function(k){
+    const L=local[k]||[],S=server[k]||[],Cl=C[k]||[];
+    const cMap={};Cl.forEach(function(x){cMap[x.id]=x;});
+    const merged=[];
+    S.forEach(function(si){
+      const li=L.find(function(x){return x.id===si.id;});
+      const ci=cMap[si.id];
+      if(!li){
+        if(!(ci&&JSON.stringify(si)===JSON.stringify(ci)))merged.push(si);
+        return;
+      }
+      if(JSON.stringify(li)!==JSON.stringify(ci))merged.push(li);
+      else merged.push(si);
+    });
+    L.forEach(function(li){
+      if(!S.some(function(x){return x.id===li.id;}))merged.push(li);
+    });
+    out[k]=merged;
+  });
+  ['settings','counters'].forEach(function(k){
+    const C2=C[k]||{},L2=local[k]||{},S2=server[k]||{};
+    const m=Object.assign({},S2);
+    Object.keys(L2).forEach(function(key){
+      if(JSON.stringify(L2[key])!==JSON.stringify(C2[key]))m[key]=L2[key];
+    });
+    out[k]=m;
+  });
+  return out;
+}
+function onConflict(j){
+  if(++window.__CONFLICTS__>3){adopt(j.doc,j.updatedAt);toast('Updated with the newest entries from another device','warn');return;}
+  DB=merge3(window.__CLEAN__,DB,j.doc);
+  window.__CLEAN__=JSON.stringify(DB);
+  window.__BASE__=j.updatedAt;
+}
+async function doPull(mergeWithLocal){
   try{
-    const body=JSON.stringify({doc:DB});
-    const done=function(){window.__CLOUD_FAILS=0;window.__CLOUD_DIRTY__=false;
-      cloudStatus('Saved to server · '+new Date().toTimeString().slice(0,5)+'<br>Take a backup every Friday.');};
-    if(window.__BEACON__&&navigator.sendBeacon){navigator.sendBeacon('/api/state',new Blob([body],{type:'application/json'}));window.__BEACON__=false;done();return;}
-    fetch('/api/state',{method:'PUT',headers:{'content-type':'application/json'},body:body,keepalive:true})
-      .then(function(r){if(!r.ok)throw 0;done();})
-      .catch(function(){
-        window.__CLOUD_FAILS=(window.__CLOUD_FAILS||0)+1;
-        if(window.__CLOUD_FAILS===1)toast('Could not reach the server — your work is safe on this device and will sync automatically.','warn');
-        cloudStatus('Offline — changes kept on this device,<br>will sync automatically.');
-        window.__CLOUD_DIRTY__=true;
-        setTimeout(function(){if(window.__CLOUD_DIRTY__&&window.__CLOUD_READY__)cloudPush();},5000);});
-  }catch(e){}
+    const r=await fetch('/api/state');if(!r.ok)return null;
+    const j=await r.json();if(!j)return null;
+    if(j.doc&&j.doc.settings){
+      if(mergeWithLocal&&window.__CLEAN__!==null&&JSON.stringify(DB)!==window.__CLEAN__){
+        DB=merge3(window.__CLEAN__,DB,j.doc);
+      }else{DB=j.doc;}
+      migrate();
+      try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
+      window.__BASE__=j.updatedAt||null;
+      window.__CLEAN__=JSON.stringify(DB);
+    }else if(j){window.__SERVER_EMPTY__=true;}
+    return j;
+  }catch(e){return null;}
 }
-function pullCloud(){
-  fetch('/api/state').then(r=>r.ok?r.json():null).then(j=>{
-    if(j&&j.doc&&j.doc.settings){DB=j.doc;migrate();
-      try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}}
-    window.__CLOUD_READY__=true;
-    cloudStatus('Connected · central PostgreSQL<br>Take a backup every Friday.');
-    if(window.__CLOUD_DIRTY__){window.__CLOUD_DIRTY__=false;cloudPush();}
+async function cloudPush(){
+  if(!window.__CLOUD_READY__){window.__CLOUD_DIRTY__=true;return;}
+  if(window.__BASE__===null&&!window.__SERVER_EMPTY__){window.__CLOUD_DIRTY__=true;await doPull(true);}
+  if(JSON.stringify(DB)===window.__CLEAN__){window.__CLOUD_DIRTY__=false;return;} /* nothing new */
+  try{
+    let tries=0;
+    while(tries<3){
+      tries++;
+      const beacon=window.__BEACON__&&!!navigator.sendBeacon;window.__BEACON__=false;
+      const body=JSON.stringify({doc:DB,base:window.__BASE__});
+      if(beacon){navigator.sendBeacon('/api/state',new Blob([body],{type:'application/json'}));window.__CLOUD_DIRTY__=false;return;}
+      const r=await fetch('/api/state',{method:'PUT',headers:{'content-type':'application/json'},body:body,keepalive:true});
+      if(r.status===409){
+        const j=await r.json();
+        if(++window.__CONFLICTS__>3){adopt(j.doc,j.updatedAt);toast('Updated with the newest entries from another device','warn');window.__CLOUD_DIRTY__=false;return;}
+        DB=merge3(window.__CLEAN__,DB,j.doc);
+        window.__CLEAN__=JSON.stringify(DB);
+        window.__BASE__=j.updatedAt;
+        continue; /* retry with the merged document */
+      }
+      if(!r.ok)throw 0;
+      const j=await r.json();
+      window.__CLOUD_FAILS=0;window.__CLOUD_DIRTY__=false;window.__CONFLICTS__=0;
+      if(j&&j.updatedAt)window.__BASE__=j.updatedAt;
+      window.__CLEAN__=JSON.stringify(DB);
+      cloudStatus('Saved to server · '+new Date().toTimeString().slice(0,5)+'<br>Take a backup every Friday.');
+      return;
+    }
+    if(window.__CONFLICTS__>3){toast('Another device is saving at the same moment — showing the newest version.','warn');}
+  }catch(e){
+    window.__CLOUD_FAILS=(window.__CLOUD_FAILS||0)+1;
+    if(window.__CLOUD_FAILS===1)toast('Could not reach the server — your work is safe on this device and will sync automatically.','warn');
+    cloudStatus('Offline — changes kept on this device,<br>will sync automatically.');
+    window.__CLOUD_DIRTY__=true;
+    setTimeout(function(){if(window.__CLOUD_DIRTY__&&window.__CLOUD_READY__)cloudPush();},5000);
+  }finally{window.__BEACON__=false;}
+}
+async function pullCloud(){
+  await doPull(false);
+  window.__CLOUD_READY__=true;
+  cloudStatus(window.__SERVER_EMPTY__?'Fresh start · central PostgreSQL':'Connected · central PostgreSQL<br>Take a backup every Friday.');
+  if(window.__CLOUD_DIRTY__){window.__CLOUD_DIRTY__=false;cloudPush();}
+  if(window.__IN__){try{nav();go(CUR);}catch(e){}}
+}
+async function cloudPullIfClean(){
+  if(!window.__CLOUD_READY__)return;
+  if(document.getElementById('mo')&&document.getElementById('mo').classList.contains('on'))return; /* never interrupt an open form */
+  if(JSON.stringify(DB)!==window.__CLEAN__){cloudPush();return;} /* pending local work → push first */
+  const j=await doPull(false);
+  if(j&&j.updatedAt&&j.updatedAt!==window.__BASE__&&j.doc&&j.doc.settings){
+    adopt(j.doc,j.updatedAt);
     if(window.__IN__){try{nav();go(CUR);}catch(e){}}
-  }).catch(()=>{window.__CLOUD_READY__=true;
-    if(window.__CLOUD_DIRTY__){window.__CLOUD_DIRTY__=false;cloudPush();}});
+    toast('Updated with entries from another device','ok');
+  }
 }
+setInterval(cloudPullIfClean,30000);
+window.addEventListener('focus',cloudPullIfClean);
 function autoLogin(na){
   const hit=allUsers().find(x=>String(x.user||'').trim().toUpperCase()===String(na.username).toUpperCase());
   if(hit){USER={id:hit.id,name:hit.name,role:hit.role,kind:hit.kind||'',perms:hit.perms};boot2();return;}
@@ -412,7 +503,7 @@ rep(
 
 /* ---- 17. in-app logins sync to NextAuth gate accounts ---- */
 rep(
-  "function pullCloud(){",
+  "function autoLogin(na){",
   `function syncGateUser(o){
   try{
     if(!o||!o.login||!o.user||!o.pass)return;
@@ -420,7 +511,7 @@ rep(
       body:JSON.stringify({username:o.user,password:o.pass,name:o.name,role:o.role,active:o.active!==false})}).catch(function(){});
   }catch(e){}
 }
-function pullCloud(){`,
+function autoLogin(na){`,
   1
 );
 rep(

@@ -66,9 +66,13 @@ railway up --detach    # deploy
 1. **The local dev server shares the production database** (through the SSH tunnel). Browser
    tests through it write to the clinic's real books. Use obviously-fake names, clean up after
    (read-modify-write via Prisma, immediately), and prefer read-only verification on live.
-2. **Last-write-wins sync:** any `save()` pushes the whole document. Two open editors = the
-   later save silently replaces the earlier. Never leave a test browser sitting on the app
-   while working on the DB.
+2. **Versioned whole-document sync:** every `save()` pushes the whole document with the
+   version (`updatedAt`) it was based on. If another device saved newer data in between, the
+   server returns **409 + its fresh document** and the device runs a 3-way merge
+   (`merge3` in the bridge) instead of overwriting — one device can no longer silently erase
+   another's entries. Writes **without a version are refused (409)** — that is what stops
+   an un-refreshed tab (old code) from clobbering; such a tab simply can't sync until
+   refreshed, and its changes stay safe in its localStorage. Do not weaken this check.
 3. **Port cache:** regenerating `clinic-app.html` requires a server restart to be served.
 4. **sendBeacon is POST**, not PUT — keep the POST export on `/api/state`.
 5. **User reports are the spec.** When the owner asks for a change, keep the diff surgical and

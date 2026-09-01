@@ -7,10 +7,12 @@ export default async function LoginPage() {
   if (session?.user) redirect("/clinic");
   return (
     <div className="lock">
-      <img src="/logo.png" alt="DC Ortho Care" />
+      <div className="logochip" style={{ maxWidth: 250, marginBottom: 12 }}>
+        <img src="/logo.png" alt="DC Ortho Care" style={{ width: "100%" }} />
+      </div>
       <LoginForm />
       <div className="lkfoot">
-        DC Ortho Care · Books &amp; Billing · v5 · Accounts are managed by the clinic admin —
+        DC Ortho Care · Books &amp; Billing · v6 · Sign in with your clinic account —
         data is stored centrally in PostgreSQL.
       </div>
     </div>

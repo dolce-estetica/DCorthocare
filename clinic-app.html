@@ -2712,16 +2712,14 @@ function lockScreen(){
       '<div id="capswarn" class="capsw"></div>'+
       '<button class="btn gold lg" id="signin" style="width:100%;justify-content:center;margin-top:8px">Sign in</button>'+
       '<div id="pinerr" class="lkerr"></div>'+
-      (dflt?'<div class="firsttime">First time on this device?<br>'+
-        'Username <b>DCORTHO</b> &nbsp;·&nbsp; Password <b>DC@1234</b>'+
-        '<button class="btn ghost sm" id="fillit" style="margin-top:9px">Fill it in for me</button></div>':'')+
+      '<div class="firsttime">Sign in with your clinic account.<br>If you forgot it, ask the admin.</div>'+
     '</div>'+
     '<div class="lkfoot">DC Ortho Care · Books &amp; Billing · v'+APP_VERSION+'<br>Data is stored centrally · PostgreSQL.</div>';
   document.body.appendChild(d);
   let shown=false;
   $('#eye').onclick=()=>{shown=!shown;$('#pin').type=shown?'text':'password';
     $('#eye').textContent=shown?'Hide':'Show';$('#pin').focus();};
-  if(dflt)$('#fillit').onclick=()=>{$('#uin').value='DCORTHO';$('#pin').value='DC@1234';$('#pinerr').textContent='';$('#signin').focus();};
+
   const caps=e=>{const on=e.getModifierState&&e.getModifierState('CapsLock');
     $('#capswarn').textContent=on?'Caps Lock is on':'';};
   $('#pin').onkeyup=caps;$('#uin').onkeyup=caps;

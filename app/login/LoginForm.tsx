@@ -6,17 +6,30 @@ import { useRouter } from "next/navigation";
 
 export default function LoginForm() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [show, setShow] = useState(false);
-  const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
-  async function submit(e: React.FormEvent) {
+  /* Direct DOM toggle — works regardless of hydration timing */
+  function toggleShow() {
+    const pw = document.getElementById("pw") as HTMLInputElement | null;
+    const eye = document.getElementById("eye");
+    if (!pw || !eye) return;
+    const show = pw.type === "password";
+    pw.type = show ? "text" : "password";
+    eye.textContent = show ? "Hide" : "Show";
+    pw.focus();
+  }
+
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const fd = new FormData(e.currentTarget);
     setBusy(true);
     setErr("");
-    const res = await signIn("credentials", { redirect: false, username, password });
+    const res = await signIn("credentials", {
+      redirect: false,
+      username: String(fd.get("username") || ""),
+      password: String(fd.get("password") || ""),
+    });
     setBusy(false);
     if (res?.error) {
       setErr("Wrong username or password.");
@@ -28,41 +41,34 @@ export default function LoginForm() {
 
   return (
     <form className="signbox" onSubmit={submit}>
-      <label className="lk">Username</label>
+      <label className="lk" htmlFor="uin">Username</label>
       <input
+        id="uin"
+        name="username"
         type="text"
-        value={username}
         autoCapitalize="characters"
         autoComplete="username"
-        onChange={(e) => setUsername(e.target.value)}
-        placeholder="DCORTHO"
+        spellCheck={false}
+        required
       />
-      <label className="lk" style={{ marginTop: 10 }}>Password</label>
+      <label className="lk" htmlFor="pw" style={{ marginTop: 10 }}>Password</label>
       <div className="pwrap" style={{ position: "relative" }}>
         <input
-          type={show ? "text" : "password"}
-          value={password}
+          id="pw"
+          name="password"
+          type="password"
           autoComplete="current-password"
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
+          required
+          style={{ paddingRight: 76 }}
         />
-        <button
-          type="button"
-          className="eyebtn"
-          onClick={() => setShow((s) => !s)}
-        >
-          {show ? "Hide" : "Show"}
+        <button type="button" className="eyebtn" id="eye" onClick={toggleShow}>
+          Show
         </button>
       </div>
       <div className="lkerr">{err}</div>
       <button className="btn gold lg" style={{ width: "100%" }} disabled={busy}>
         {busy ? "Signing in…" : "Sign in"}
       </button>
-      <div className="firsttime">
-        First time on this app?<br />
-        Admin: <b>DCORTHO / DC@1234</b><br />
-        Change passwords in <b>Users &amp; Roles</b> after first login.
-      </div>
     </form>
   );
 }

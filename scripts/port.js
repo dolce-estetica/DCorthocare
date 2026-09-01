@@ -165,5 +165,19 @@ rep(
   1
 );
 
+/* ---- 10. never display the default credentials on the hosted lock screen ---- */
+rep(
+  `      (dflt?'<div class="firsttime">First time on this device?<br>'+
+        'Username <b>DCORTHO</b> &nbsp;·&nbsp; Password <b>DC@1234</b>'+
+        '<button class="btn ghost sm" id="fillit" style="margin-top:9px">Fill it in for me</button></div>':'')+`,
+  `      '<div class="firsttime">Sign in with your clinic account.<br>If you forgot it, ask the admin.</div>'+`,
+  1
+);
+rep(
+  `  if(dflt)$('#fillit').onclick=()=>{$('#uin').value='DCORTHO';$('#pin').value='DC@1234';$('#pinerr').textContent='';$('#signin').focus();};`,
+  ``,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

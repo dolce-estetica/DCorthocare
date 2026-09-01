@@ -22,7 +22,7 @@ export default function LoginForm() {
       setErr("Wrong username or password.");
       return;
     }
-    router.push("/dashboard");
+    router.push("/clinic");
     router.refresh();
   }
 

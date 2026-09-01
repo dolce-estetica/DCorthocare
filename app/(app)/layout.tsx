@@ -10,13 +10,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const groups: { title: string; items: { href: string; icon: string; label: string }[] }[] = [
     {
-      title: "Daily work",
-      items: [
-        { href: "/dashboard", icon: "📊", label: "Dashboard" },
-        { href: "/billing/new", icon: "🧾", label: "New Bill" },
-        { href: "/bills", icon: "📄", label: "Bills & Dues" },
-        { href: "/patients", icon: "👤", label: "Patients" },
-      ],
+      title: "Clinic app",
+      items: [{ href: "/clinic", icon: "🏥", label: "Open DC Ortho Care" }],
     },
   ];
   if (role === "ADMIN") {

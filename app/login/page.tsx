@@ -4,7 +4,7 @@ import LoginForm from "./LoginForm";
 
 export default async function LoginPage() {
   const session = await auth();
-  if (session?.user) redirect("/dashboard");
+  if (session?.user) redirect("/clinic");
   return (
     <div className="lock">
       <img src="/logo.png" alt="DC Ortho Care" />

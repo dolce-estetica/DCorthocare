@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function UsersPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMIN") redirect("/dashboard");
+  if (session.user.role !== "ADMIN") redirect("/clinic");
 
   const users = await prisma.user.findMany({ include: { _count: { select: { bills: true } } }, orderBy: [{ role: "asc" }, { name: "asc" }] });
 

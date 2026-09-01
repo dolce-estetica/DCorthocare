@@ -2,27 +2,28 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { money, money0, dayKey, roleLabel, R } from "@/lib/format";
+import { money, money0, dayKey, R } from "@/lib/format";
 import { resolveRange, weekKey, Period } from "@/lib/period";
 import PageHeader from "../PageHeader";
 
 export const dynamic = "force-dynamic";
 
-const MODE_COLORS: Record<string, string> = {
-  CASH: "#B26A00",
-  UPI: "#0E7C57",
-  CARD: "#1E4E7F",
-  BANK: "#6B4E9B",
+type DocBill = {
+  date: string;
+  type?: string;
+  gross: number;
+  disc: number;
+  net: number;
+  tv?: number;
+  cgst?: number;
+  sgst?: number;
+  payments?: { d: string; mode: string; amt: number; ref?: string }[];
+  doctorId?: string;
+  patientId?: string;
+  pname?: string;
+  cancelled?: boolean;
+  lines?: { sid?: string; name?: string; amt: number }[];
 };
-
-function qs(p: string, pro: string, from?: string, to?: string) {
-  const params = new URLSearchParams();
-  params.set("p", p);
-  if (pro) params.set("pro", pro);
-  if (from) params.set("from", from);
-  if (to) params.set("to", to);
-  return `/admin?${params.toString()}`;
-}
 
 export default async function AdminPage({
   searchParams,
@@ -31,7 +32,7 @@ export default async function AdminPage({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "ADMIN") redirect("/dashboard");
+  if (session.user.role !== "ADMIN") redirect("/clinic");
 
   const sp = await searchParams;
   const one = (k: string) => (Array.isArray(sp[k]) ? (sp[k] as string[])[0] : (sp[k] as string)) || "";
@@ -40,110 +41,114 @@ export default async function AdminPage({
   const fromS = one("from");
   const toS = one("to");
 
-  const professionals = await prisma.user.findMany({
-    where: { role: { in: ["DOCTOR", "PHYSIO"] }, active: true },
-    orderBy: [{ role: "asc" }, { name: "asc" }],
-  });
+  const row = await prisma.appState.findUnique({ where: { id: "clinic" } });
+  const doc: any = row?.data || {};
+  const allBills: DocBill[] = Array.isArray(doc.bills) ? doc.bills : [];
+  const doctors: any[] = Array.isArray(doc.doctors) ? doc.doctors : [];
+  const services: any[] = Array.isArray(doc.services) ? doc.services : [];
 
   const range = resolveRange(p, fromS, toS);
-  const proFilter = pro ? { professionalId: pro } : undefined;
+  const fromKey = dayKey(range.from);
+  const toKey = dayKey(range.to);
 
-  const bills = await prisma.bill.findMany({
-    where: { date: { gte: range.from, lte: range.to }, ...proFilter },
-    include: { patient: true, professional: true, items: { include: { service: true } }, payments: true },
-  });
-  const payments = await prisma.payment.findMany({
-    where: { date: { gte: range.from, lte: range.to }, bill: proFilter ? { professionalId: pro } : undefined },
-  });
-  const billsUpTo = await prisma.bill.findMany({
-    where: { date: { lte: range.to }, ...proFilter },
-    include: { payments: true },
-  });
+  const proName = (id?: string) => {
+    const d = doctors.find((x) => x.id === id);
+    return d ? d.name : "Front desk / unattributed";
+  };
+  const proKind = (id?: string) => {
+    const d = doctors.find((x) => x.id === id);
+    return d ? d.kind || "doctor" : "staff";
+  };
 
-  const billed = R(bills.reduce((s, b) => s + b.total, 0));
-  const discounts = R(bills.reduce((s, b) => s + b.discountAmount, 0));
-  const gst = R(bills.reduce((s, b) => s + b.taxAmount, 0));
-  const collected = R(payments.reduce((s, x) => s + x.amount, 0));
-  const pending = R(
-    billsUpTo.reduce((s, b) => s + (b.total - b.payments.reduce((x, q) => x + q.amount, 0)), 0)
+  const bills = allBills.filter(
+    (b) =>
+      !b.cancelled &&
+      b.date >= fromKey &&
+      b.date <= toKey &&
+      (!pro || (pro === "none" ? !b.doctorId : b.doctorId === pro))
   );
-  const patients = new Set(bills.map((b) => b.patientId)).size;
-  const avg = bills.length ? billed / bills.length : 0;
-  const cashShare = collected > 0 ? (payments.filter((x) => x.mode === "CASH").reduce((s, x) => s + x.amount, 0) / collected) * 100 : 0;
+  const paymentsOf = (b: DocBill) => (b.payments || []).reduce((s, x) => s + (Number(x.amt) || 0), 0);
+  const payments = bills.flatMap((b) => (b.payments || []).map((x) => ({ ...x, bill: b })));
 
-  /* ---- daily series (cap 35 latest days in range) ---- */
+  const billed = R(bills.reduce((s, b) => s + b.net, 0));
+  const gross = R(bills.reduce((s, b) => s + b.gross, 0));
+  const discounts = R(bills.reduce((s, b) => s + (b.disc || 0), 0));
+  const gst = R(bills.reduce((s, b) => s + (b.cgst || 0) + (b.sgst || 0), 0));
+  const collected = R(payments.reduce((s, x) => s + x.amt, 0));
+  const pending = R(
+    allBills
+      .filter((b) => !b.cancelled && b.date <= toKey && (!pro || (pro === "none" ? !b.doctorId : b.doctorId === pro)))
+      .reduce((s, b) => s + (b.net - paymentsOf(b)), 0)
+  );
+  const patients = new Set(bills.map((b) => b.patientId || b.pname)).size;
+  const avg = bills.length ? billed / bills.length : 0;
+  const cashAmt = payments.filter((x) => x.mode === "Cash").reduce((s, x) => s + x.amt, 0);
+  const cashShare = collected > 0 ? (cashAmt / collected) * 100 : 0;
+
+  /* by day */
   const byDay = new Map<string, number>();
-  bills.forEach((b) => {
-    const k = dayKey(b.date);
-    byDay.set(k, (byDay.get(k) || 0) + b.total);
-  });
+  bills.forEach((b) => byDay.set(b.date, (byDay.get(b.date) || 0) + b.net));
   const days = [...byDay.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(-35);
   const maxDay = Math.max(1, ...days.map((d) => d[1]));
 
-  /* ---- weekly ---- */
+  /* by week */
   const byWeek = new Map<string, { bills: number; billed: number; collected: number }>();
   bills.forEach((b) => {
-    const k = weekKey(b.date);
+    const k = weekKey(b.date + "T12:00:00+05:30");
     const w = byWeek.get(k) || { bills: 0, billed: 0, collected: 0 };
     w.bills++;
-    w.billed += b.total;
+    w.billed += b.net;
     byWeek.set(k, w);
   });
   payments.forEach((x) => {
-    const k = weekKey(x.date);
+    const k = weekKey(x.d + "T12:00:00+05:30");
     const w = byWeek.get(k) || { bills: 0, billed: 0, collected: 0 };
-    w.collected += x.amount;
+    w.collected += x.amt;
     byWeek.set(k, w);
   });
   const weeks = [...byWeek.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
 
-  /* ---- per professional ---- */
-  type Pro = { name: string; role: string; bills: number; patients: Set<string>; billed: number; collected: number; pending: number };
-  const byPro = new Map<string, Pro>();
+  /* by professional */
+  type ProRow = { name: string; kind: string; bills: number; billed: number; collected: number };
+  const byPro = new Map<string, ProRow>();
   bills.forEach((b) => {
-    const k = b.professionalId;
-    const e = byPro.get(k) || { name: b.professional.name, role: b.professional.role, bills: 0, patients: new Set<string>(), billed: 0, collected: 0, pending: 0 };
+    const k = b.doctorId || "_none";
+    const e = byPro.get(k) || { name: proName(b.doctorId), kind: proKind(b.doctorId), bills: 0, billed: 0, collected: 0 };
     e.bills++;
-    e.patients.add(b.patientId);
-    e.billed += b.total;
+    e.billed += b.net;
     byPro.set(k, e);
   });
   payments.forEach((x) => {
-    const b = bills.find((bb) => bb.id === x.billId);
-    if (!b) return;
-    const e = byPro.get(b.professionalId);
-    if (e) e.collected += x.amount;
-  });
-  billsUpTo.forEach((b) => {
-    const e = byPro.get(b.professionalId);
-    if (e) e.pending += b.total - b.payments.reduce((x, q) => x + q.amount, 0);
+    const k = x.bill.doctorId || "_none";
+    const e = byPro.get(k);
+    if (e) e.collected += x.amt;
   });
 
-  /* ---- categories & top services ---- */
+  /* by category & top services */
+  const svcCat = (sid?: string, name?: string) => {
+    const s = services.find((x) => x.id === sid);
+    return s?.cat || "Other";
+  };
   const byCat = new Map<string, number>();
+  const bySvc = new Map<string, { amount: number; n: number }>();
   bills.forEach((b) =>
-    b.items.forEach((i) => {
-      const c = i.service?.category || "Other";
-      byCat.set(c, (byCat.get(c) || 0) + i.amount);
+    (b.lines || []).forEach((l) => {
+      const c = svcCat(l.sid, l.name);
+      byCat.set(c, (byCat.get(c) || 0) + l.amt);
+      const e = bySvc.get(l.name || c) || { amount: 0, n: 0 };
+      e.amount += l.amt;
+      e.n++;
+      bySvc.set(l.name || c, e);
     })
   );
   const cats = [...byCat.entries()].sort((a, b) => b[1] - a[1]);
   const maxCat = Math.max(1, ...cats.map((c) => c[1]));
-
-  const bySvc = new Map<string, { amount: number; n: number }>();
-  bills.forEach((b) =>
-    b.items.forEach((i) => {
-      const e = bySvc.get(i.name) || { amount: 0, n: 0 };
-      e.amount += i.amount;
-      e.n++;
-      bySvc.set(i.name, e);
-    })
-  );
   const topSvc = [...bySvc.entries()].sort((a, b) => b[1].amount - a[1].amount).slice(0, 8);
 
-  /* ---- payment modes ---- */
+  /* payment modes (clinic mode labels) */
+  const MODES = ["Cash", "UPI", "Card", "Bank transfer", "Cheque"];
   const byMode = new Map<string, number>();
-  payments.forEach((x) => byMode.set(x.mode, (byMode.get(x.mode) || 0) + x.amount));
+  payments.forEach((x) => byMode.set(x.mode, (byMode.get(x.mode) || 0) + x.amt));
 
   const pills: [string, string][] = [
     ["today", "Today"],
@@ -152,12 +157,20 @@ export default async function AdminPage({
     ["fy", "This FY"],
     ["all", "All time"],
   ];
-  const selectedPro = professionals.find((x) => x.id === pro);
+  const qs = (np: string, npro: string) => {
+    const q = new URLSearchParams();
+    q.set("p", np);
+    if (npro) q.set("pro", npro);
+    if (fromS) q.set("from", fromS);
+    if (toS) q.set("to", toS);
+    return `/admin?${q.toString()}`;
+  };
+  const professionals = doctors.filter((d) => d.active !== false);
 
   return (
     <>
-      <PageHeader title="Admin Dashboard" sub={selectedPro ? `${range.label} · ${selectedPro.name}` : range.label}>
-        <Link className="btn sm ghost" href="/bills?status=DUE">Dues follow-up</Link>
+      <PageHeader title="Admin Dashboard" sub={`${range.label} · from the live clinic books`}>
+        <Link className="btn sm ghost" href="/clinic">Open clinic app</Link>
       </PageHeader>
       <main id="view">
         <div className="filterbar">
@@ -178,11 +191,11 @@ export default async function AdminPage({
             </div>
             <div>
               <label>Doctor / Physio</label>
-              <select name="pro" defaultValue={pro} style={{ minWidth: 170 }}>
-                <option value="">All professionals</option>
-                {professionals.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name} ({x.role === "PHYSIO" ? "Physio" : "Doctor"})
+              <select name="pro" defaultValue={pro} style={{ minWidth: 180 }}>
+                <option value="">Everyone</option>
+                {professionals.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} ({d.kind === "physio" ? "Physio" : "Doctor"})
                   </option>
                 ))}
               </select>
@@ -215,23 +228,25 @@ export default async function AdminPage({
         </div>
         <div className="grid g4" style={{ marginBottom: 14 }}>
           <div className="kpi">
+            <div className="l">Gross before discount</div>
+            <div className="v">{money(gross)}</div>
+            <div className="d">at displayed rate card</div>
+          </div>
+          <div className="kpi">
             <div className="l">Discounts given</div>
             <div className="v">{money(discounts)}</div>
-            <div className="d">{bills.filter((b) => b.discountAmount > 0).length} discounted bills</div>
+            <div className="d">{bills.filter((b) => (b.disc || 0) > 0).length} discounted bills</div>
           </div>
           <div className="kpi">
             <div className="l">GST component</div>
             <div className="v">{money(gst)}</div>
-            <div className="d">goods &amp; aesthetic services</div>
-          </div>
-          <div className="kpi">
-            <div className="l">Net of GST</div>
-            <div className="v">{money(billed - gst)}</div>
-            <div className="d">taxable healthcare revenue</div>
+            <div className="d">CGST + SGST on goods &amp; aesthetic</div>
           </div>
           <div className="kpi">
             <div className="l">Cash share</div>
-            <div className="v" style={cashShare > 5 ? { color: "var(--bad)" } : undefined}>{R(cashShare)}%</div>
+            <div className="v" style={cashShare > 5 ? { color: "var(--bad)" } : undefined}>
+              {R(cashShare)}%
+            </div>
             <div className="d">keep under 5% for GST safety</div>
           </div>
         </div>
@@ -262,7 +277,7 @@ export default async function AdminPage({
               <div className="empty"><div className="big">💵</div>Nothing collected yet.</div>
             ) : (
               <>
-                {(["CASH", "UPI", "CARD", "BANK"] as const).map((m) => {
+                {MODES.map((m) => {
                   const v = byMode.get(m) || 0;
                   return (
                     <div className="tot" key={m}>
@@ -271,12 +286,6 @@ export default async function AdminPage({
                     </div>
                   );
                 })}
-                <div className="modebar">
-                  {(["CASH", "UPI", "CARD", "BANK"] as const).map((m) => {
-                    const v = byMode.get(m) || 0;
-                    return <i key={m} style={{ width: `${(v / collected) * 100}%`, background: MODE_COLORS[m] }}></i>;
-                  })}
-                </div>
               </>
             )}
           </div>
@@ -291,29 +300,25 @@ export default async function AdminPage({
                   <th>Professional</th>
                   <th>Role</th>
                   <th className="num">Bills</th>
-                  <th className="num">Patients</th>
                   <th className="num">Billed</th>
                   <th className="num">Collected (in period)</th>
-                  <th className="num">Pending</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {byPro.size === 0 && (
-                  <tr><td colSpan={8}><div className="empty"><div className="big">🩺</div>No revenue attributed in this period.</div></td></tr>
+                  <tr><td colSpan={6}><div className="empty"><div className="big">🩺</div>No revenue attributed in this period.</div></td></tr>
                 )}
                 {[...byPro.entries()]
                   .sort((a, b) => b[1].billed - a[1].billed)
                   .map(([id, e]) => (
                     <tr key={id}>
                       <td><b>{e.name}</b></td>
-                      <td><span className="chip info">{e.role === "PHYSIO" ? "Physio" : "Doctor"}</span></td>
+                      <td><span className="chip info">{e.kind === "physio" ? "Physio" : e.kind === "doctor" ? "Doctor" : "Front desk"}</span></td>
                       <td className="num">{e.bills}</td>
-                      <td className="num">{e.patients.size}</td>
                       <td className="num"><b>{money(e.billed)}</b></td>
                       <td className="num">{money(e.collected)}</td>
-                      <td className="num" style={{ color: e.pending > 0 ? "var(--bad)" : undefined }}>{money(e.pending)}</td>
-                      <td><Link className="btn sm ghost" href={qs(p, id, fromS, toS)}>Only this</Link></td>
+                      <td><Link className="btn sm ghost" href={qs(p, id === "_none" ? "none" : id)}>Only this</Link></td>
                     </tr>
                   ))}
               </tbody>

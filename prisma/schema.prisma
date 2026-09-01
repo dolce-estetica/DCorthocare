@@ -27,6 +27,12 @@ enum PayMode {
   BANK
 }
 
+model AppState {
+  id        String   @id
+  data      Json
+  updatedAt DateTime @updatedAt
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String   @unique

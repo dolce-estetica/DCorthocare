@@ -555,7 +555,7 @@ let _saveT=null;
 function save(){clearTimeout(_saveT);_saveT=setTimeout(()=>{
   try{localStorage.setItem(KEY,JSON.stringify(DB));}
   catch(e){toast('Could not save — browser storage full. Take a backup!','bad');}
-  cloudPush();
+  clearTimeout(window.__CLOUD_T);window.__CLOUD_T=setTimeout(cloudPush,900);
 },80);}
 function saveNow(){clearTimeout(_saveT);try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}cloudPush();}
 
@@ -2880,15 +2880,26 @@ function boot2(){window.__IN__=true;
     if(e.altKey&&e.key==='e'){e.preventDefault();go('expenses');}
   });
   window.addEventListener('beforeunload',function(){window.__BEACON__=true;saveNow();});
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden'){window.__BEACON__=true;saveNow();}});
 }
 /* ===== server sync bridge (PostgreSQL) ===== */
 window.__CLOUD_READY__=false;window.__CLOUD_DIRTY__=false;
+function cloudStatus(txt){const f=document.querySelector('#side .foot');if(f)f.innerHTML=txt;}
 function cloudPush(){
   if(!window.__CLOUD_READY__){window.__CLOUD_DIRTY__=true;return;}
   try{
     const body=JSON.stringify({doc:DB});
-    if(window.__BEACON__&&navigator.sendBeacon){navigator.sendBeacon('/api/state',new Blob([body],{type:'application/json'}));window.__BEACON__=false;return;}
-    fetch('/api/state',{method:'PUT',headers:{'content-type':'application/json'},body:body,keepalive:true}).catch(()=>{});
+    const done=function(){window.__CLOUD_FAILS=0;window.__CLOUD_DIRTY__=false;
+      cloudStatus('Saved to server · '+new Date().toTimeString().slice(0,5)+'<br>Take a backup every Friday.');};
+    if(window.__BEACON__&&navigator.sendBeacon){navigator.sendBeacon('/api/state',new Blob([body],{type:'application/json'}));window.__BEACON__=false;done();return;}
+    fetch('/api/state',{method:'PUT',headers:{'content-type':'application/json'},body:body,keepalive:true})
+      .then(function(r){if(!r.ok)throw 0;done();})
+      .catch(function(){
+        window.__CLOUD_FAILS=(window.__CLOUD_FAILS||0)+1;
+        if(window.__CLOUD_FAILS===1)toast('Could not reach the server — your work is safe on this device and will sync automatically.','warn');
+        cloudStatus('Offline — changes kept on this device,<br>will sync automatically.');
+        window.__CLOUD_DIRTY__=true;
+        setTimeout(function(){if(window.__CLOUD_DIRTY__&&window.__CLOUD_READY__)cloudPush();},5000);});
   }catch(e){}
 }
 function pullCloud(){
@@ -2896,6 +2907,7 @@ function pullCloud(){
     if(j&&j.doc&&j.doc.settings){DB=j.doc;migrate();
       try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}}
     window.__CLOUD_READY__=true;
+    cloudStatus('Connected · central PostgreSQL<br>Take a backup every Friday.');
     if(window.__CLOUD_DIRTY__){window.__CLOUD_DIRTY__=false;cloudPush();}
     if(window.__IN__){try{nav();go(CUR);}catch(e){}}
   }).catch(()=>{window.__CLOUD_READY__=true;

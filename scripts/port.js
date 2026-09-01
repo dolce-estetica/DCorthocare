@@ -150,5 +150,20 @@ rep(
   1
 );
 
+/* ---- 9. sign out must also end the NextAuth session, not just reload ---- */
+rep(
+  "function signOut(){location.reload();}",
+  `async function signOut(){
+  try{
+    const csrf=await fetch('/api/auth/csrf').then(r=>r.json());
+    await fetch('/api/auth/signout',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({csrfToken:csrf.csrfToken,callbackUrl:'/login'})});
+  }catch(e){}
+  try{localStorage.removeItem(KEY);}catch(e){}
+  location.href='/login';
+}`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

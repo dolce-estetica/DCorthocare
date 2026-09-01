@@ -656,7 +656,15 @@ function nav(){
     (isOwner()?'Owner — full access':(USER.role==='doctor'?(USER.kind==='physio'?'Physiotherapist':'Doctor'):'Staff account'))+'</div></div>'+
     (DB.settings.pinLock?'<span class="out" onclick="signOut()">Sign out</span>':'');
 }
-function signOut(){location.reload();}
+async function signOut(){
+  try{
+    const csrf=await fetch('/api/auth/csrf').then(r=>r.json());
+    await fetch('/api/auth/signout',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({csrfToken:csrf.csrfToken,callbackUrl:'/login'})});
+  }catch(e){}
+  try{localStorage.removeItem(KEY);}catch(e){}
+  location.href='/login';
+}
 function go(v){
   if(!VIEWS[v])v='dash';
   if(v!=='dash'&&!((v==='activity'||v==='doctors')?isOwner():can(v))){toast('You do not have access to that. Ask the owner.','bad');v='dash';}

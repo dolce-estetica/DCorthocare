@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DOCTOR
+  PHYSIO
+  STAFF
+}
+
+enum DiscountType {
+  NONE
+  PERCENT
+  AMOUNT
+}
+
+enum PayMode {
+  CASH
+  UPI
+  CARD
+  BANK
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(STAFF)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  bills        Bill[]   @relation("Professional")
+}
+
+model Patient {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String
+  age       Int?
+  gender    String?
+  address   String?
+  createdAt DateTime @default(now())
+  bills     Bill[]
+}
+
+model Service {
+  id        String      @id @default(cuid())
+  code      String      @unique
+  name      String
+  malayalam String?
+  category  String
+  price     Float       @default(0)
+  taxClass  String      @default("exempt")
+  active    Boolean     @default(true)
+  billItems BillItem[]
+}
+
+model Bill {
+  id             String       @id @default(cuid())
+  billNo         String       @unique
+  date           DateTime     @default(now())
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id])
+  professionalId String
+  professional   User         @relation("Professional", fields: [professionalId], references: [id])
+  items          BillItem[]
+  payments       Payment[]
+  subtotal       Float
+  discountType   DiscountType @default(NONE)
+  discountValue  Float        @default(0)
+  discountAmount Float        @default(0)
+  taxAmount      Float        @default(0)
+  total          Float
+  notes          String?
+  createdAt      DateTime     @default(now())
+
+  @@index([date])
+  @@index([professionalId, date])
+}
+
+model BillItem {
+  id        String   @id @default(cuid())
+  billId    String
+  bill      Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id])
+  name      String
+  qty       Float    @default(1)
+  rate      Float
+  amount    Float
+  taxClass  String   @default("exempt")
+}
+
+model Payment {
+  id     String   @id @default(cuid())
+  billId String
+  bill   Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  amount Float
+  mode   PayMode  @default(CASH)
+  date   DateTime @default(now())
+
+  @@index([date])
+}

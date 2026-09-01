@@ -2120,6 +2120,7 @@ function docForm(id,kind){
     if(o.login&&(!o.user||!o.pass)){toast('Username and password are needed for a login','warn');return;}
     if(o.login&&nameTaken(o.user,id)){toast('That username is already used','bad');return;}
     if(d)Object.assign(d,o);else{o.id=uid();DB.doctors.push(o);}
+    syncGateUser({name:o.name,user:o.user,pass:o.pass,login:o.login,active:o.active,role:o.kind==='physio'?'PHYSIO':'DOCTOR'});
     logAct(d?'edit':'create','doctor',(d?'Updated ':'Added ')+(o.kind==='physio'?'physiotherapist ':'doctor ')+o.name,0,d?d.id:o.id);
     save();closeModal();refresh();toast('Saved','ok');};
 }
@@ -2230,7 +2231,16 @@ VIEWS.staff=function(){
       '<td><button class="btn sm ghost" onclick="staffForm(\''+s.id+'\')">Edit</button></td></tr>';}).join('')+'</tbody></table></div>'
      :'<div class="empty"><div class="big">👥</div>Add the receptionist / physiotherapist / housekeeping staff here once.<br><br><button class="btn gold" onclick="staffForm()">＋ Add staff</button></div>')+
     (DB.staff.some(s=>s.login)&&!DB.settings.pinLock?'<div class="alert w" style="margin-top:12px"><span>⚠</span><div>You have given staff a PIN, but <b>the sign-in screen is switched off</b>, so the app opens straight into full owner access. Turn on <b>Settings → Ask for a PIN when the app opens</b> or the permissions above do nothing.</div></div>':'')+
-  '</div>'+
+   '</div>'+
+  '<div class="card pad"><h3>Doctors &amp; physiotherapists</h3>'+
+    '<div class="hint" style="margin-bottom:8px">Managed in <b>Doctors &amp; Physios</b> — listed here so the whole team is on one page. Their earnings appear in Reports for CA, and their procedures in the Admin Dashboard.</div>'+
+    '<div class="tw"><table><thead><tr><th>Name</th><th>Role</th><th>Speciality</th><th>Can sign in</th><th>Status</th></tr></thead><tbody>'+
+    DB.doctors.map(function(dc){return '<tr><td><b>'+esc(dc.name)+'</b><div class="hint">'+esc(dc.qual||'')+'</div></td>'+
+      '<td>'+(dc.isOwner?'<span class="chip gold">Owner</span>':(dc.kind==='physio'?'Physiotherapist':'Doctor'))+'</td>'+
+      '<td>'+esc(dc.spec||'')+'</td>'+
+      '<td>'+(dc.login?'<span class="chip ok">'+esc(dc.user||'—')+'</span>':'<span class="chip">no login</span>')+'</td>'+
+      '<td>'+(dc.active!==false?'<span class="chip ok">Active</span>':'<span class="chip">Inactive</span>')+'</td></tr>';}).join('')+
+    '</tbody></table></div></div>'+
   (run?'<div class="card pad"><h3>Salary for '+mName(m)+'</h3>'+
     '<div class="tw"><table><thead><tr><th>Staff</th><th class="num">Salary</th><th class="num">Extra / bonus</th><th class="num">Advance</th><th class="num">Other deduction</th><th class="num">Prof. tax</th><th class="num">Net pay</th><th>Paid?</th><th></th></tr></thead><tbody>'+
     run.rows.map((r,i)=>{const s=DB.staff.find(x=>x.id===r.staffId)||{};
@@ -2291,6 +2301,7 @@ function staffForm(id){
     if(o.login&&nameTaken(o.user,s&&s.id)){toast('That username is already used','bad');return;}
     if(s){Object.assign(s,o);logAct('edit','staff','Updated staff '+o.name,0,s.id);}
     else{o.id=uid();DB.staff.push(o);logAct('create','staff','Added staff '+o.name,0,o.id);}
+    syncGateUser({name:o.name,user:o.user,pass:o.pass,login:o.login,active:o.active,role:'STAFF'});
     save();closeModal();refresh();
     toast('Saved','ok');};
 }
@@ -2900,6 +2911,13 @@ function cloudPush(){
         cloudStatus('Offline — changes kept on this device,<br>will sync automatically.');
         window.__CLOUD_DIRTY__=true;
         setTimeout(function(){if(window.__CLOUD_DIRTY__&&window.__CLOUD_READY__)cloudPush();},5000);});
+  }catch(e){}
+}
+function syncGateUser(o){
+  try{
+    if(!o||!o.login||!o.user||!o.pass)return;
+    fetch('/api/sync-user',{method:'POST',headers:{'content-type':'application/json'},keepalive:true,
+      body:JSON.stringify({username:o.user,password:o.pass,name:o.name,role:o.role,active:o.active!==false})}).catch(function(){});
   }catch(e){}
 }
 function pullCloud(){

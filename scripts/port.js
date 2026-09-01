@@ -410,5 +410,55 @@ rep(
   1
 );
 
+/* ---- 17. in-app logins sync to NextAuth gate accounts ---- */
+rep(
+  "function pullCloud(){",
+  `function syncGateUser(o){
+  try{
+    if(!o||!o.login||!o.user||!o.pass)return;
+    fetch('/api/sync-user',{method:'POST',headers:{'content-type':'application/json'},keepalive:true,
+      body:JSON.stringify({username:o.user,password:o.pass,name:o.name,role:o.role,active:o.active!==false})}).catch(function(){});
+  }catch(e){}
+}
+function pullCloud(){`,
+  1
+);
+rep(
+  `    if(d)Object.assign(d,o);else{o.id=uid();DB.doctors.push(o);}
+    logAct(d?'edit':'create','doctor',(d?'Updated ':'Added ')+(o.kind==='physio'?'physiotherapist ':'doctor ')+o.name,0,d?d.id:o.id);`,
+  `    if(d)Object.assign(d,o);else{o.id=uid();DB.doctors.push(o);}
+    syncGateUser({name:o.name,user:o.user,pass:o.pass,login:o.login,active:o.active,role:o.kind==='physio'?'PHYSIO':'DOCTOR'});
+    logAct(d?'edit':'create','doctor',(d?'Updated ':'Added ')+(o.kind==='physio'?'physiotherapist ':'doctor ')+o.name,0,d?d.id:o.id);`,
+  1
+);
+rep(
+  `    if(s){Object.assign(s,o);logAct('edit','staff','Updated staff '+o.name,0,s.id);}
+    else{o.id=uid();DB.staff.push(o);logAct('create','staff','Added staff '+o.name,0,o.id);}
+    save();closeModal();refresh();`,
+  `    if(s){Object.assign(s,o);logAct('edit','staff','Updated staff '+o.name,0,s.id);}
+    else{o.id=uid();DB.staff.push(o);logAct('create','staff','Added staff '+o.name,0,o.id);}
+    syncGateUser({name:o.name,user:o.user,pass:o.pass,login:o.login,active:o.active,role:'STAFF'});
+    save();closeModal();refresh();`,
+  1
+);
+
+/* ---- 18. Staff & Salary: show doctors & physiotherapists too ---- */
+rep(
+  `  '</div>'+
+  (run?'<div class="card pad"><h3>Salary for '+mName(m)+'</h3>'+`,
+  `   '</div>'+
+  '<div class="card pad"><h3>Doctors &amp; physiotherapists</h3>'+
+    '<div class="hint" style="margin-bottom:8px">Managed in <b>Doctors &amp; Physios</b> — listed here so the whole team is on one page. Their earnings appear in Reports for CA, and their procedures in the Admin Dashboard.</div>'+
+    '<div class="tw"><table><thead><tr><th>Name</th><th>Role</th><th>Speciality</th><th>Can sign in</th><th>Status</th></tr></thead><tbody>'+
+    DB.doctors.map(function(dc){return '<tr><td><b>'+esc(dc.name)+'</b><div class="hint">'+esc(dc.qual||'')+'</div></td>'+
+      '<td>'+(dc.isOwner?'<span class="chip gold">Owner</span>':(dc.kind==='physio'?'Physiotherapist':'Doctor'))+'</td>'+
+      '<td>'+esc(dc.spec||'')+'</td>'+
+      '<td>'+(dc.login?'<span class="chip ok">'+esc(dc.user||'—')+'</span>':'<span class="chip">no login</span>')+'</td>'+
+      '<td>'+(dc.active!==false?'<span class="chip ok">Active</span>':'<span class="chip">Inactive</span>')+'</td></tr>';}).join('')+
+    '</tbody></table></div></div>'+
+  (run?'<div class="card pad"><h3>Salary for '+mName(m)+'</h3>'+`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

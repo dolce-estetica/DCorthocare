@@ -301,7 +301,7 @@ const LOGO='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAvgAAAEHCAMAAADs0MKAAA
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.prototype.slice.call(r.querySelectorAll(s));
 const KEY='dcoc_db_v4';
-const APP_VERSION='4.1';
+const APP_VERSION='6.0';
 const R=n=>Math.round((Number(n)||0)*100)/100;
 const money=n=>'₹'+R(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const money0=n=>'₹'+Math.round(Number(n)||0).toLocaleString('en-IN');
@@ -2624,14 +2624,14 @@ VIEWS.settings=function(){
        '</select><div class="hint">In the browser print box, untick <b>Headers and footers</b> once — that removes the file path and page number from the printed bill.</div></div>'+
      '<div class="f"><label><input type="checkbox" style="width:auto;margin-right:7px"'+(s.needRef!==false?' checked':'')+' onchange="setS(\'needRef\',this.checked)"> Force the front desk to type the UPI / card reference on every non-cash payment</label></div>'+
    '</div>'+
-   '<div class="card pad"><h3>Backup — read this once</h3>'+
-     '<div class="alert w"><span>⚠</span><div>Right now everything lives inside <b>this browser on this computer</b>. Clear the browser data and it is gone. Until we host it properly on a server, take a backup every Friday and keep the file in Google Drive.</div></div>'+
+   '<div class="card pad"><h3>Backup &amp; safety</h3>'+
+     '<div class="alert i"><span>●</span><div><b>Your data is saved automatically to the clinic\'s central database</b> (PostgreSQL hosted on Railway) after every entry — every device that signs in sees the same books. This browser only keeps a temporary working copy, so clearing it is safe. Even so, download a backup every Friday and keep the file in Google Drive — belt and braces.</div></div>'+
      '<div class="row"><button class="btn gold" onclick="backup()">⤓ Download backup</button>'+
      '<button class="btn ghost" onclick="$(\'#restorefile\').click()">⤒ Restore from backup</button>'+
      '<input type="file" id="restorefile" accept=".json" style="display:none" onchange="restore(this)">'+
      '<button class="btn ghost" onclick="loadDemo()">Load sample data</button>'+
      '<button class="btn danger" onclick="wipe()">Erase everything</button></div>'+
-     '<div class="hint" style="margin-top:8px">Data is written automatically after every entry. You are running <b>version '+APP_VERSION+'</b> — the sign-in screen shows this too, so you can always tell which file you opened.</div>'+
+     '<div class="hint" style="margin-top:8px">Everything is saved automatically to the central database after every entry — every signed-in device shares these books. You are running <b>version '+APP_VERSION+'</b>.</div>'+
    '</div>'+
   '</div></div>'};
 };
@@ -2659,7 +2659,7 @@ function restore(inp){
   r.readAsText(f);
 }
 function wipe(){
-  confirmBox('Erase everything?','Every patient, bill, expense and setting will be deleted from this browser. Take a backup first.',
+  confirmBox('Erase everything?','Every patient, bill, expense and setting will be deleted from the <b>central database</b> — for every device, not just this one. This cannot be recovered. Take a backup first.',
     ()=>{localStorage.removeItem(KEY);DB=seedMasters(blankDB());saveNow();refresh();toast('Erased — fresh start','warn');},'Erase',true);
 }
 
@@ -2849,7 +2849,7 @@ function lockScreen(){
     const hit=allUsers().find(x=>String(x.user||'').trim().toUpperCase()===u&&String(x.pass||'').trim()===pw);
     if(!hit){
       const userOk=allUsers().some(x=>String(x.user||'').trim().toUpperCase()===u);
-      $('#pinerr').textContent=userOk?'That password is wrong':'No such username on this device';
+      $('#pinerr').textContent=userOk?'That password is wrong':'No such username — ask the clinic admin';
       $('#pin').value='';$('#pin').focus();return;}
     USER={id:hit.id,name:hit.name,role:hit.role,kind:hit.kind||'',perms:hit.perms};
     if(hit.role!=='owner'){logAct('create','session','Signed in',0,hit.id);save();}

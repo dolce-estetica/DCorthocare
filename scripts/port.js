@@ -277,7 +277,37 @@ rep(
   1
 );
 
-/* ---- 15. owner can delete any entry: stock movements + payments ---- */
+/* ---- 16. all user-facing storage texts tell the truth (central PostgreSQL) ---- */
+rep(
+  "const APP_VERSION='4.1';",
+  "const APP_VERSION='6.0';",
+  1
+);
+rep(
+  `'<div class="card pad"><h3>Backup — read this once</h3>'+`,
+  `'<div class="card pad"><h3>Backup &amp; safety</h3>'+`,
+  1
+);
+rep(
+  `'<div class="alert w"><span>⚠</span><div>Right now everything lives inside <b>this browser on this computer</b>. Clear the browser data and it is gone. Until we host it properly on a server, take a backup every Friday and keep the file in Google Drive.</div></div>'+`,
+  `'<div class="alert i"><span>●</span><div><b>Your data is saved automatically to the clinic\\'s central database</b> (PostgreSQL hosted on Railway) after every entry — every device that signs in sees the same books. This browser only keeps a temporary working copy, so clearing it is safe. Even so, download a backup every Friday and keep the file in Google Drive — belt and braces.</div></div>'+`,
+  1
+);
+rep(
+  `'<div class="hint" style="margin-top:8px">Data is written automatically after every entry. You are running <b>version '+APP_VERSION+'</b> — the sign-in screen shows this too, so you can always tell which file you opened.</div>'+`,
+  `'<div class="hint" style="margin-top:8px">Everything is saved automatically to the central database after every entry — every signed-in device shares these books. You are running <b>version '+APP_VERSION+'</b>.</div>'+`,
+  1
+);
+rep(
+  `confirmBox('Erase everything?','Every patient, bill, expense and setting will be deleted from this browser. Take a backup first.',`,
+  `confirmBox('Erase everything?','Every patient, bill, expense and setting will be deleted from the <b>central database</b> — for every device, not just this one. This cannot be recovered. Take a backup first.',`,
+  1
+);
+rep(
+  `$('#pinerr').textContent=userOk?'That password is wrong':'No such username on this device';`,
+  `$('#pinerr').textContent=userOk?'That password is wrong':'No such username — ask the clinic admin';`,
+  1
+);
 rep(
   "function recipeForm(sid){",
   `function delMove(id){

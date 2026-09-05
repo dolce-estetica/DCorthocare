@@ -33,6 +33,18 @@ model AppState {
   updatedAt DateTime @updatedAt
 }
 
+model Attachment {
+  id        String   @id @default(cuid())
+  expenseId String
+  filename  String
+  mime      String
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([expenseId])
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String   @unique

@@ -828,5 +828,30 @@ function expDelAttFromModal(attId,expId){
 function expForm(id,presetHead){`,
   1
 );
+/* ---- 21. patients register: SL number + registration date ---- */
+rep(
+  `    (list.length?'<div class="tw"><table><thead><tr><th>ID</th><th>Name</th><th>Age/Sex</th><th>Phone</th><th>Place</th><th class="num">Visits</th><th class="num">Billed</th><th class="num">Due</th><th></th></tr></thead><tbody>'+
+      list.slice(0,400).map(p=>{const bs=liveBills().filter(b=>b.patientId===p.id);
+        return '<tr><td><b>'+esc(p.pid)+'</b></td><td>'+esc(p.name)+'</td><td>'+(p.age||'')+' '+esc(p.sex||'').slice(0,1)+'</td>'+
+        '<td>'+esc(p.phone||'')+'</td><td>'+esc(p.addr||'')+'</td><td class="num">'+bs.length+'</td>'+
+        '<td class="num">'+money0(sum(bs,b=>b.net))+'</td><td class="num">'+(sum(bs,billDue)>0.5?'<b style="color:var(--bad)">'+money0(sum(bs,billDue))+'</b>':'—')+'</td>'+
+        '<td><button class="btn sm ghost" onclick="patCard(\\''+p.id+'\\')">History</button></td></tr>';}).join('')+'</tbody></table></div>'`,
+  `    (list.length?'<div class="tw"><table><thead><tr><th class="num">SL</th><th>ID</th><th>Name</th><th>Age/Sex</th><th>Phone</th><th>Place</th><th>Registered</th><th class="num">Visits</th><th class="num">Billed</th><th class="num">Due</th><th></th></tr></thead><tbody>'+
+      list.slice(0,400).map((p,ix)=>{const bs=liveBills().filter(b=>b.patientId===p.id);
+        return '<tr><td class="num">'+(ix+1)+'</td><td><b>'+esc(p.pid)+'</b></td><td>'+esc(p.name)+'</td><td>'+(p.age||'')+' '+esc(p.sex||'').slice(0,1)+'</td>'+
+        '<td>'+esc(p.phone||'')+'</td><td>'+esc(p.addr||'')+'</td><td>'+(p.created?dmy(p.created):'—')+'</td><td class="num">'+bs.length+'</td>'+
+        '<td class="num">'+money0(sum(bs,b=>b.net))+'</td><td class="num">'+(sum(bs,billDue)>0.5?'<b style="color:var(--bad)">'+money0(sum(bs,billDue))+'</b>':'—')+'</td>'+
+        '<td><button class="btn sm ghost" onclick="patCard(\\''+p.id+'\\')">History</button></td></tr>';}).join('')+'</tbody></table></div>'`,
+  1
+);
+rep(
+  `    '<div class="hint" style="margin-bottom:10px">'+esc(p.sex||'')+' '+(p.age?p.age+' yrs':'')+' · '+esc(p.phone||'')+' · '+esc(p.addr||'')+
+      (p.note?'<br>Note: '+esc(p.note):'')+'</div>'+`,
+  `    '<div class="hint" style="margin-bottom:10px">'+esc(p.sex||'')+' '+(p.age?p.age+' yrs':'')+' · '+esc(p.phone||'')+' · '+esc(p.addr||'')+
+      (p.created?' · Registered '+dmy(p.created):'')+
+      (p.note?'<br>Note: '+esc(p.note):'')+'</div>'+`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

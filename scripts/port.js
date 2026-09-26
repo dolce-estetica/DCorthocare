@@ -893,5 +893,28 @@ rep(
   1
 );
 
+/* ---- 23. never discard device-stored entries: union-merge on boot ---- */
+rep(
+  "  try{const raw=localStorage.getItem(KEY);if(raw){DB=JSON.parse(raw);migrate();return;}}catch(e){console.warn(e);}",
+  "  try{const raw=localStorage.getItem(KEY);if(raw){DB=JSON.parse(raw);migrate();window.__LOCAL_SNAPSHOT__=JSON.stringify(DB);return;}}catch(e){console.warn(e);}",
+  1
+);
+rep(
+  `      if(mergeWithLocal&&window.__CLEAN__!==null&&JSON.stringify(DB)!==window.__CLEAN__){
+        DB=merge3(window.__CLEAN__,DB,j.doc);
+      }else{DB=j.doc;}`,
+  `      if(mergeWithLocal&&window.__CLEAN__!==null&&JSON.stringify(DB)!==window.__CLEAN__){
+        DB=merge3(window.__CLEAN__,DB,j.doc);
+      }else if(window.__LOCAL_SNAPSHOT__&&!window.__SERVER_EMPTY__){
+        /* device held entries the server has never seen (trapped work) — keep them */
+        try{
+          const L=JSON.parse(window.__LOCAL_SNAPSHOT__);
+          DB=merge3(window.__LOCAL_SNAPSHOT__,L,j.doc);
+          if(JSON.stringify(DB)!==JSON.stringify(j.doc))window.__CLOUD_DIRTY__=true;
+        }catch(e){DB=j.doc;}
+      }else{DB=j.doc;}`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

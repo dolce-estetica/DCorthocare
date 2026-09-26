@@ -25,17 +25,9 @@ async function handleWrite(req: Request) {
 
   const row = await prisma.appState.findUnique({ where: { id: "clinic" } });
   if (row) {
-    /* a write without a version comes from an un-refreshed tab (old code) —
-       refuse it so it cannot erase newer entries; the tab must refresh once */
-    if (!j.base) {
-      return NextResponse.json(
-        { error: "Missing version — refresh the app once.", doc: row.data, updatedAt: row.updatedAt.toISOString() },
-        { status: 409 }
-      );
-    }
-    /* another device saved newer data after this device last read — refuse the
-       overwrite and hand back the fresh document for a merge */
-    if (row.updatedAt.toISOString() > String(j.base)) {
+    /* TEMPORARY recovery window: accept un-versioned writes so a device running
+       older app code can deliver trapped entries. Re-armed after recovery. */
+    if (j.base && row.updatedAt.toISOString() > String(j.base)) {
       return NextResponse.json(
         { error: "Newer data saved from another device.", doc: row.data, updatedAt: row.updatedAt.toISOString() },
         { status: 409 }

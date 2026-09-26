@@ -80,9 +80,14 @@ rep(
   "function boot(){\n  load();\n  if(DB.settings.pinLock!==false)lockScreen();",
   `function boot(){
   load();
-  pullCloud();
   const na=window.__NA_USER__;
-  if(na&&na.username){autoLogin(na);return;}
+  if(na&&na.username){
+    /* resolve the signed-in user only AFTER the central data is loaded, so
+       staff records and their admin-granted permissions are available */
+    pullCloud().then(function(){autoLogin(na);});
+    return;
+  }
+  pullCloud();
   if(DB.settings.pinLock!==false)lockScreen();`,
   1
 );

@@ -858,5 +858,40 @@ rep(
   1
 );
 
+/* ---- 22. explicit "Register new patients" permission ---- */
+rep(
+  `  ['patients','Patients','Add patients and see their history'],`,
+  `  ['patients','Patients','Add patients and see their history'],
+  ['registerPatient','Register new patients','Create new patient records (they get a clinic ID)'],`,
+  1
+);
+rep(
+  `function canRegister(){return isOwner()||(USER.role==='staff'&&can('queue'));}`,
+  `function canRegister(){return isOwner()||!!(USER.perms&&USER.perms.registerPatient)||(USER.role==='staff'&&can('queue'));}`,
+  1
+);
+rep(
+  `const DEFAULT_PERMS={queue:true,consult:false,bill:true,bills:true,patients:true,register:true,
+  expenses:true,stock:true,assets:false,staff:false,services:false,reports:false,settings:false};`,
+  `const DEFAULT_PERMS={queue:true,consult:false,bill:true,bills:true,patients:true,register:true,registerPatient:true,
+  expenses:true,stock:true,assets:false,staff:false,services:false,reports:false,settings:false};`,
+  1
+);
+rep(
+  `const DOCTOR_PERMS={queue:true,consult:true,bill:false,bills:false,patients:true,register:false,
+  expenses:false,stock:false,assets:false,staff:false,services:false,reports:false,settings:false};`,
+  `const DOCTOR_PERMS={queue:true,consult:true,bill:false,bills:false,patients:true,register:false,registerPatient:true,
+  expenses:false,stock:false,assets:false,staff:false,services:false,reports:false,settings:false};`,
+  1
+);
+
+rep(
+  `const PHYSIO_PERMS={queue:true,consult:true,bill:false,bills:false,patients:true,register:false,
+  expenses:false,stock:false,assets:false,staff:false,services:false,reports:false,settings:false};`,
+  `const PHYSIO_PERMS={queue:true,consult:true,bill:false,bills:false,patients:true,register:false,registerPatient:true,
+  expenses:false,stock:false,assets:false,staff:false,services:false,reports:false,settings:false};`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

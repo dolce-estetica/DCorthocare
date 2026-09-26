@@ -460,6 +460,7 @@ const PERMS=[
   ['bill','Make bills','Create new bills and take payment'],
   ['bills','See all bills &amp; collect dues','View the bill list and record pending payments'],
   ['patients','Patients','Add patients and see their history'],
+  ['registerPatient','Register new patients','Create new patient records (they get a clinic ID)'],
   ['register','Day register','Print the Form 25 daily case register'],
   ['expenses','Enter expenses','Record money paid out'],
   ['stock','Stock &amp; purchases','Record purchases, see stock'],
@@ -469,18 +470,18 @@ const PERMS=[
   ['reports','Reports','Profit, cash book, CA pack'],
   ['settings','Settings &amp; backup','Full control, including erasing data']
 ];
-const DEFAULT_PERMS={queue:true,consult:false,bill:true,bills:true,patients:true,register:true,
+const DEFAULT_PERMS={queue:true,consult:false,bill:true,bills:true,patients:true,register:true,registerPatient:true,
   expenses:true,stock:true,assets:false,staff:false,services:false,reports:false,settings:false};
-const DOCTOR_PERMS={queue:true,consult:true,bill:false,bills:false,patients:true,register:false,
+const DOCTOR_PERMS={queue:true,consult:true,bill:false,bills:false,patients:true,register:false,registerPatient:true,
   expenses:false,stock:false,assets:false,staff:false,services:false,reports:false,settings:false};
 /* a physiotherapist sees the queue and can write session notes, nothing financial */
-const PHYSIO_PERMS={queue:true,consult:true,bill:false,bills:false,patients:true,register:false,
+const PHYSIO_PERMS={queue:true,consult:true,bill:false,bills:false,patients:true,register:false,registerPatient:true,
   expenses:false,stock:false,assets:false,staff:false,services:false,reports:false,settings:false};
 let USER={id:'owner',name:'Owner',role:'owner',perms:null};
 const isOwner=()=>USER.role==='owner';
 function can(m){return isOwner()||!!(USER.perms&&USER.perms[m]);}
 /* Registration (and therefore creating a patient) belongs to the front desk. */
-function canRegister(){return isOwner()||(USER.role==='staff'&&can('queue'));}
+function canRegister(){return isOwner()||!!(USER.perms&&USER.perms.registerPatient)||(USER.role==='staff'&&can('queue'));}
 function logAct(act,ent,summary,amount,targetId){
   DB.log=DB.log||[];
   DB.log.push({id:uid(),ts:new Date().toISOString(),uid:USER.id,uname:USER.name,role:USER.role,

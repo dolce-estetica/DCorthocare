@@ -994,5 +994,17 @@ rep(
   1
 );
 
+/* ---- 25. fix the recovery upload bug: CLEAN must reflect the SERVER doc, so
+   rescued/merged local entries are seen as unsent and actually uploaded ---- */
+rep(
+  `      window.__BASE__=j.updatedAt||null;
+      window.__CLEAN__=JSON.stringify(DB);
+      seenSave(j.doc);`,
+  `      window.__BASE__=j.updatedAt||null;
+      window.__CLEAN__=JSON.stringify(j.doc);
+      seenSave(j.doc);`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

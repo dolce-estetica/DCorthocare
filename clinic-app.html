@@ -3126,7 +3126,7 @@ async function doPull(mergeWithLocal){
       migrate();
       try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
       window.__BASE__=j.updatedAt||null;
-      window.__CLEAN__=JSON.stringify(DB);
+      window.__CLEAN__=JSON.stringify(j.doc);
       seenSave(j.doc);
     }else if(j){window.__SERVER_EMPTY__=true;}
     return j;

@@ -916,5 +916,83 @@ rep(
   1
 );
 
+/* ---- 24. sync marker: rescue only never-seen local entries; never resurrect deletions ---- */
+rep(
+  "function cloudStatus(txt){",
+  `function seenSave(doc){
+  try{
+    const m={};
+    ['patients','services','bills','expenses','vendors','stockItems','stockMoves','assets','staff','payruns','log','doctors','visits'].forEach(function(k){
+      m[k]=(doc[k]||[]).map(function(x){return x&&x.id;}).filter(Boolean);});
+    localStorage.setItem('dcoc_seen',JSON.stringify(m));
+  }catch(e){}
+}
+function cloudStatus(txt){`,
+  1
+);
+rep(
+  `function adopt(doc,updated){
+  DB=doc;migrate();
+  try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
+  window.__BASE__=updated||null;
+  window.__CLEAN__=JSON.stringify(DB);
+}`,
+  `function adopt(doc,updated){
+  DB=doc;migrate();
+  try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
+  window.__BASE__=updated||null;
+  window.__CLEAN__=JSON.stringify(DB);
+  seenSave(doc);
+}`,
+  1
+);
+rep(
+  `      window.__BASE__=j.updatedAt||null;
+      window.__CLEAN__=JSON.stringify(DB);
+    }else if(j){window.__SERVER_EMPTY__=true;}`,
+  `      window.__BASE__=j.updatedAt||null;
+      window.__CLEAN__=JSON.stringify(DB);
+      seenSave(j.doc);
+    }else if(j){window.__SERVER_EMPTY__=true;}`,
+  1
+);
+rep(
+  `      window.__CLEAN__=JSON.stringify(DB);
+      cloudStatus('Saved to server · '+new Date().toTimeString().slice(0,5)+'<br>Take a backup every Friday.');`,
+  `      window.__CLEAN__=JSON.stringify(DB);
+      seenSave(DB);
+      cloudStatus('Saved to server · '+new Date().toTimeString().slice(0,5)+'<br>Take a backup every Friday.');`,
+  1
+);
+rep(
+  `      }else if(window.__LOCAL_SNAPSHOT__&&!window.__SERVER_EMPTY__){
+        /* device held entries the server has never seen (trapped work) — keep them */
+        try{
+          const L=JSON.parse(window.__LOCAL_SNAPSHOT__);
+          DB=merge3(window.__LOCAL_SNAPSHOT__,L,j.doc);
+          if(JSON.stringify(DB)!==JSON.stringify(j.doc))window.__CLOUD_DIRTY__=true;
+        }catch(e){DB=j.doc;}
+      }else{DB=j.doc;}`,
+  `      }else if(window.__LOCAL_SNAPSHOT__&&!window.__SERVER_EMPTY__){
+        /* rescue entries saved on this device that the server has NEVER seen;
+           anything the server has since deleted stays deleted */
+        try{
+          const L=JSON.parse(window.__LOCAL_SNAPSHOT__);
+          let seen=null;try{seen=JSON.parse(localStorage.getItem('dcoc_seen')||'null');}catch(e2){}
+          const res=JSON.parse(JSON.stringify(j.doc));let rescued=0;
+          ['patients','services','bills','expenses','vendors','stockItems','stockMoves','assets','staff','payruns','log','doctors','visits'].forEach(function(k){
+            const seenIds={};(((seen&&seen[k])||[])).forEach(function(id){seenIds[id]=1;});
+            (L[k]||[]).forEach(function(x){if(!x||!x.id)return;
+              if(!seenIds[x.id]&&!(res[k]||[]).some(function(y){return y.id===x.id;})){
+                res[k]=res[k]||[];res[k].push(x);rescued++;}});});
+          if(L.counters){res.counters=res.counters||{};Object.keys(L.counters).forEach(function(key){
+            res.counters[key]=Math.max(res.counters[key]||0,L.counters[key]||0);});}
+          DB=res;
+          if(rescued){window.__CLOUD_DIRTY__=true;toast('Recovered '+rescued+' entry/entries saved earlier on this device','ok');}
+        }catch(e){DB=j.doc;}
+      }else{DB=j.doc;}`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

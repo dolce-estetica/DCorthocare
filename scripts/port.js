@@ -1006,5 +1006,18 @@ rep(
   1
 );
 
+/* ---- 26. fix the real blocker: keepalive bodies are capped at 64KB in Chrome;
+   the clinic document outgrew it, so every upload threw. Send normally. ---- */
+rep(
+  `      const r=await fetch('/api/state',{method:'PUT',headers:{'content-type':'application/json'},body:body,keepalive:true});`,
+  `      const r=await fetch('/api/state',{method:'PUT',headers:{'content-type':'application/json'},body:body});`,
+  1
+);
+rep(
+  `      if(beacon){navigator.sendBeacon('/api/state',new Blob([body],{type:'application/json'}));window.__CLOUD_DIRTY__=false;return;}`,
+  `      if(beacon&&body.length<60000){if(navigator.sendBeacon('/api/state',new Blob([body],{type:'application/json'}))){window.__CLOUD_DIRTY__=false;return;}}`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

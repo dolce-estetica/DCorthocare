@@ -3142,8 +3142,8 @@ async function cloudPush(){
       tries++;
       const beacon=window.__BEACON__&&!!navigator.sendBeacon;window.__BEACON__=false;
       const body=JSON.stringify({doc:DB,base:window.__BASE__});
-      if(beacon){navigator.sendBeacon('/api/state',new Blob([body],{type:'application/json'}));window.__CLOUD_DIRTY__=false;return;}
-      const r=await fetch('/api/state',{method:'PUT',headers:{'content-type':'application/json'},body:body,keepalive:true});
+      if(beacon&&body.length<60000){if(navigator.sendBeacon('/api/state',new Blob([body],{type:'application/json'}))){window.__CLOUD_DIRTY__=false;return;}}
+      const r=await fetch('/api/state',{method:'PUT',headers:{'content-type':'application/json'},body:body});
       if(r.status===409){
         const j=await r.json();
         if(++window.__CONFLICTS__>3){adopt(j.doc,j.updatedAt);toast('Updated with the newest entries from another device','warn');window.__CLOUD_DIRTY__=false;return;}

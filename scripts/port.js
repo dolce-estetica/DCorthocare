@@ -1030,12 +1030,13 @@ rep(
   `setInterval(cloudPullIfClean,30000);`,
   `function searchFresh(q,repaint){
   if(window.__SFQ===q)return;window.__SFQ=q;
-  if(JSON.stringify(DB)!==window.__CLEAN__)return; /* pending local work — cloudPush merges it */
+  if(JSON.stringify(DB)!==window.__CLEAN__){repaint();return;} /* pending local work — cloudPush merges it */
   fetch('/api/state').then(function(r){return r.ok?r.json():null;}).then(function(j){
-    if(!j||!j.doc||!j.doc.settings||j.updatedAt===window.__BASE__)return;
-    if(JSON.stringify(DB)!==window.__CLEAN__)return;
-    adopt(j.doc,j.updatedAt);repaint();
-  }).catch(function(){window.__SFQ='';});
+    if(j&&j.doc&&j.doc.settings&&j.updatedAt!==window.__BASE__&&JSON.stringify(DB)===window.__CLEAN__){
+      adopt(j.doc,j.updatedAt);
+    }
+    repaint();
+  }).catch(function(){repaint();});
 }
 setInterval(cloudPullIfClean,30000);`,
   1

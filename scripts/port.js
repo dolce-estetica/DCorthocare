@@ -1019,5 +1019,84 @@ rep(
   1
 );
 
+/* ---- 27. the front-desk searches must see what other devices just saved.
+   The register/bill searches only looked at this device's copy, and while a
+   modal is open the 30s poll is paused — so a patient added a minute ago on
+   the other machine was "not found" and got registered again (SAMSON ×5,
+   CHANDRAN ×5, UNNIKRISHNAN ×2 on the server). When a search comes up empty,
+   fetch the server copy once for this query, refresh quietly (no re-render),
+   and repaint. Only safe to adopt when there is no pending local work. ---- */
+rep(
+  `setInterval(cloudPullIfClean,30000);`,
+  `function searchFresh(q,repaint){
+  if(window.__SFQ===q)return;window.__SFQ=q;
+  if(JSON.stringify(DB)!==window.__CLEAN__)return; /* pending local work — cloudPush merges it */
+  fetch('/api/state').then(function(r){return r.ok?r.json():null;}).then(function(j){
+    if(!j||!j.doc||!j.doc.settings||j.updatedAt===window.__BASE__)return;
+    if(JSON.stringify(DB)!==window.__CLEAN__)return;
+    adopt(j.doc,j.updatedAt);repaint();
+  }).catch(function(){window.__SFQ='';});
+}
+setInterval(cloudPullIfClean,30000);`,
+  1
+);
+rep(
+  `  $('#nv_q').oninput=e=>{const q=e.target.value.trim().toLowerCase();
+    if(q.length<2){$('#nv_res').innerHTML='';return;}
+    const hits=DB.patients.filter(p=>(p.name+' '+p.phone+' '+p.pid).toLowerCase().indexOf(q)>=0).slice(0,7);
+    $('#nv_res').innerHTML=hits.length?'<div style="border:1px solid var(--line);border-radius:10px;overflow:hidden">'+
+      hits.map(p=>'<div class="navi" style="color:var(--ink);border-radius:0" onclick="qPick(\\''+p.id+'\\')"><b>'+esc(p.name)+'</b>&nbsp;<span style="color:var(--ink3)">'+
+        esc(p.pid)+' · '+esc(p.phone||'')+'</span></div>').join('')+'</div>'
+      :'<div class="hint">Not found — press <b>Brand new patient</b>.</div>';};`,
+  `  const nvPaint=()=>{const q=($('#nv_q').value||'').trim().toLowerCase();
+    if(q.length<2){$('#nv_res').innerHTML='';return;}
+    const hits=DB.patients.filter(p=>(p.name+' '+p.phone+' '+p.pid).toLowerCase().indexOf(q)>=0).slice(0,7);
+    $('#nv_res').innerHTML=hits.length?'<div style="border:1px solid var(--line);border-radius:10px;overflow:hidden">'+
+      hits.map(p=>'<div class="navi" style="color:var(--ink);border-radius:0" onclick="qPick(\\''+p.id+'\\')"><b>'+esc(p.name)+'</b>&nbsp;<span style="color:var(--ink3)">'+
+        esc(p.pid)+' · '+esc(p.phone||'')+'</span></div>').join('')+'</div>'
+      :(window.__SFQ===q?'<div class="hint">Not found — press <b>Brand new patient</b>.</div>':'<div class="hint">Searching the clinic records…</div>');
+    if(!hits.length){clearTimeout(window.__SFT);window.__SFT=setTimeout(function(){searchFresh(q,nvPaint);},450);}};
+  $('#nv_q').oninput=nvPaint;`,
+  1
+);
+rep(
+  `    $('#psearch').oninput=e=>{
+      const q=e.target.value.trim().toLowerCase();
+      if(q.length<2){$('#presult').innerHTML='';return;}
+      const hits=DB.patients.filter(p=>(p.name+' '+p.phone+' '+p.pid).toLowerCase().indexOf(q)>=0).slice(0,8);
+      $('#presult').innerHTML=hits.length?'<div style="border:1px solid var(--line);border-radius:10px;margin-top:8px;overflow:hidden">'+
+        hits.map(p=>'<div class="navi" style="color:var(--ink);border-radius:0" onclick="pickPatient(\\''+p.id+'\\')"><b>'+esc(p.name)+'</b>&nbsp;<span style="color:var(--ink3)">'+esc(p.pid)+' · '+esc(p.phone||'no phone')+' · '+esc(p.sex||'')+' '+(p.age||'')+'</span></div>').join('')+'</div>'
+        :'<div class="hint" style="margin-top:8px">No match. <a onclick="newPatient()" style="cursor:pointer"><b>Add new patient</b></a></div>';
+    };`,
+  `    const psPaint=()=>{const q=($('#psearch').value||'').trim().toLowerCase();
+      if(q.length<2){$('#presult').innerHTML='';return;}
+      const hits=DB.patients.filter(p=>(p.name+' '+p.phone+' '+p.pid).toLowerCase().indexOf(q)>=0).slice(0,8);
+      $('#presult').innerHTML=hits.length?'<div style="border:1px solid var(--line);border-radius:10px;margin-top:8px;overflow:hidden">'+
+        hits.map(p=>'<div class="navi" style="color:var(--ink);border-radius:0" onclick="pickPatient(\\''+p.id+'\\')"><b>'+esc(p.name)+'</b>&nbsp;<span style="color:var(--ink3)">'+esc(p.pid)+' · '+esc(p.phone||'no phone')+' · '+esc(p.sex||'')+' '+(p.age||'')+'</span></div>').join('')+'</div>'
+        :(window.__SFQ===q?'<div class="hint" style="margin-top:8px">No match. <a onclick="newPatient()" style="cursor:pointer"><b>Add new patient</b></a></div>':'<div class="hint" style="margin-top:8px">Searching the clinic records…</div>');
+      if(!hits.length){clearTimeout(window.__SFT);window.__SFT=setTimeout(function(){searchFresh(q,psPaint);},450);}};
+    $('#psearch').oninput=psPaint;`,
+  1
+);
+
+/* ---- 28. last line of defence against duplicate patients: if the mobile
+   number being saved already exists, stop and say which record it belongs to.
+   The front desk can still force a second record (twins, one phone), but the
+   accidental re-registrations end here. ---- */
+rep(
+  `  $('#np_ok').onclick=()=>{
+    const n=$('#np_n').value.trim();if(!n){toast('Name is needed','warn');return;}
+    const p={id:uid(),pid:nextPid(),name:n,phone:$('#np_p').value.trim(),age:$('#np_a').value,`,
+  `  $('#np_ok').onclick=()=>{
+    const n=$('#np_n').value.trim();if(!n){toast('Name is needed','warn');return;}
+    const ph10=$('#np_p').value.trim().replace(/\\D/g,'').slice(-10);
+    if(ph10.length===10){
+      const dup=DB.patients.find(function(x){return String(x.phone||'').replace(/\\D/g,'').slice(-10)===ph10;});
+      if(dup&&!confirm('This mobile number is already registered:\\n\\n  '+dup.name+' · '+dup.pid+'\\n\\nCancel — go back and search for this patient instead\\nOK — register a separate record anyway'))return;
+    }
+    const p={id:uid(),pid:nextPid(),name:n,phone:$('#np_p').value.trim(),age:$('#np_a').value,`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

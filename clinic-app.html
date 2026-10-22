@@ -900,14 +900,14 @@ VIEWS.bill=function(){
    '</div>'+
   '</div>',
   after(){
-    $('#psearch').oninput=e=>{
-      const q=e.target.value.trim().toLowerCase();
+    const psPaint=()=>{const q=($('#psearch').value||'').trim().toLowerCase();
       if(q.length<2){$('#presult').innerHTML='';return;}
       const hits=DB.patients.filter(p=>(p.name+' '+p.phone+' '+p.pid).toLowerCase().indexOf(q)>=0).slice(0,8);
       $('#presult').innerHTML=hits.length?'<div style="border:1px solid var(--line);border-radius:10px;margin-top:8px;overflow:hidden">'+
         hits.map(p=>'<div class="navi" style="color:var(--ink);border-radius:0" onclick="pickPatient(\''+p.id+'\')"><b>'+esc(p.name)+'</b>&nbsp;<span style="color:var(--ink3)">'+esc(p.pid)+' · '+esc(p.phone||'no phone')+' · '+esc(p.sex||'')+' '+(p.age||'')+'</span></div>').join('')+'</div>'
-        :'<div class="hint" style="margin-top:8px">No match. <a onclick="newPatient()" style="cursor:pointer"><b>Add new patient</b></a></div>';
-    };
+        :(window.__SFQ===q?'<div class="hint" style="margin-top:8px">No match. <a onclick="newPatient()" style="cursor:pointer"><b>Add new patient</b></a></div>':'<div class="hint" style="margin-top:8px">Searching the clinic records…</div>');
+      if(!hits.length){clearTimeout(window.__SFT);window.__SFT=setTimeout(function(){searchFresh(q,psPaint);},450);}};
+    $('#psearch').oninput=psPaint;
     $('#ssearch').oninput=drawPick;$('#scat').onchange=drawPick;
     drawPick();drawCart();
   }};
@@ -1102,6 +1102,11 @@ function newPatient(pref){
     '<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" id="np_ok">Save patient</button>');
   $('#np_ok').onclick=()=>{
     const n=$('#np_n').value.trim();if(!n){toast('Name is needed','warn');return;}
+    const ph10=$('#np_p').value.trim().replace(/\D/g,'').slice(-10);
+    if(ph10.length===10){
+      const dup=DB.patients.find(function(x){return String(x.phone||'').replace(/\D/g,'').slice(-10)===ph10;});
+      if(dup&&!confirm('This mobile number is already registered:\n\n  '+dup.name+' · '+dup.pid+'\n\nCancel — go back and search for this patient instead\nOK — register a separate record anyway'))return;
+    }
     const p={id:uid(),pid:nextPid(),name:n,phone:$('#np_p').value.trim(),age:$('#np_a').value,
       sex:$('#np_s').value,addr:$('#np_ad').value.trim(),note:$('#np_note').value.trim(),created:today()};
     DB.patients.push(p);logAct('create','patient','Added patient '+p.name+' ('+p.pid+')',0,p.id);save();closeModal();
@@ -1914,13 +1919,15 @@ function newVisit(pid){
       :'<div class="hint">No patient picked. Search above, or press “Brand new patient”.</div>';};
   window.qClear=()=>{chosen='';paint();};
   window.qPick=id=>{chosen=id;$('#nv_q').value='';$('#nv_res').innerHTML='';paint();};
-  $('#nv_q').oninput=e=>{const q=e.target.value.trim().toLowerCase();
+  const nvPaint=()=>{const q=($('#nv_q').value||'').trim().toLowerCase();
     if(q.length<2){$('#nv_res').innerHTML='';return;}
     const hits=DB.patients.filter(p=>(p.name+' '+p.phone+' '+p.pid).toLowerCase().indexOf(q)>=0).slice(0,7);
     $('#nv_res').innerHTML=hits.length?'<div style="border:1px solid var(--line);border-radius:10px;overflow:hidden">'+
       hits.map(p=>'<div class="navi" style="color:var(--ink);border-radius:0" onclick="qPick(\''+p.id+'\')"><b>'+esc(p.name)+'</b>&nbsp;<span style="color:var(--ink3)">'+
         esc(p.pid)+' · '+esc(p.phone||'')+'</span></div>').join('')+'</div>'
-      :'<div class="hint">Not found — press <b>Brand new patient</b>.</div>';};
+      :(window.__SFQ===q?'<div class="hint">Not found — press <b>Brand new patient</b>.</div>':'<div class="hint">Searching the clinic records…</div>');
+    if(!hits.length){clearTimeout(window.__SFT);window.__SFT=setTimeout(function(){searchFresh(q,nvPaint);},450);}};
+  $('#nv_q').oninput=nvPaint;
   paint();
   $('#nv_ok').onclick=()=>{
     if(!chosen){toast('Pick or register the patient first','warn');return;}
@@ -3187,6 +3194,15 @@ async function cloudPullIfClean(){
     if(window.__IN__){try{nav();go(CUR);}catch(e){}}
     toast('Updated with entries from another device','ok');
   }
+}
+function searchFresh(q,repaint){
+  if(window.__SFQ===q)return;window.__SFQ=q;
+  if(JSON.stringify(DB)!==window.__CLEAN__)return; /* pending local work — cloudPush merges it */
+  fetch('/api/state').then(function(r){return r.ok?r.json():null;}).then(function(j){
+    if(!j||!j.doc||!j.doc.settings||j.updatedAt===window.__BASE__)return;
+    if(JSON.stringify(DB)!==window.__CLEAN__)return;
+    adopt(j.doc,j.updatedAt);repaint();
+  }).catch(function(){window.__SFQ='';});
 }
 setInterval(cloudPullIfClean,30000);
 window.addEventListener('focus',cloudPullIfClean);

@@ -1099,5 +1099,76 @@ rep(
   1
 );
 
+/* ---- 29. deletions must travel with the document. When records are merged
+   or removed server-side, a device holding an older copy re-inserts them on
+   its next save (merge3 treats them as local-only work). The document now
+   carries deletedIds — every pull/merge/adopt filters those ids out and
+   merge3 never resurrects them. ---- */
+rep(
+  `/* three-way merge at array-item level: preserves both devices' work */`,
+  `function applyTomb(){
+  if(!DB||!DB.deletedIds)return;
+  var t=DB.deletedIds,did=false;
+  ['patients','services','bills','expenses','vendors','stockItems','stockMoves','assets','staff','payruns','notes','log','doctors','visits'].forEach(function(k){
+    if(DB[k]&&DB[k].some(function(x){return x&&x.id&&t[x.id];})){DB[k]=DB[k].filter(function(x){return !(x&&x.id&&t[x.id]);});did=true;}});
+  return did;
+}
+/* three-way merge at array-item level: preserves both devices' work */`,
+  1
+);
+rep(
+  `    S.forEach(function(si){
+      const li=L.find(function(x){return x.id===si.id;});`,
+  `    S.forEach(function(si){
+      if(T[si.id])return; /* deleted centrally — stays deleted */
+      const li=L.find(function(x){return x.id===si.id;});`,
+  1
+);
+rep(
+  `    L.forEach(function(li){
+      if(!S.some(function(x){return x.id===li.id;}))merged.push(li);
+    });`,
+  `    L.forEach(function(li){
+      if(T[li.id])return; /* never resurrect a centrally-deleted record */
+      if(!S.some(function(x){return x.id===li.id;}))merged.push(li);
+    });`,
+  1
+);
+rep(
+  `function merge3(cleanStr,local,server){
+  const C=JSON.parse(cleanStr||'{}');`,
+  `function merge3(cleanStr,local,server){
+  const T=(server&&server.deletedIds)||{};
+  const C=JSON.parse(cleanStr||'{}');`,
+  1
+);
+rep(
+  `      migrate();
+      try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}`,
+  `      migrate();applyTomb();
+      try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}`,
+  1
+);
+rep(
+  `function adopt(doc,updated){
+  DB=doc;migrate();`,
+  `function adopt(doc,updated){
+  DB=doc;migrate();applyTomb();`,
+  1
+);
+rep(
+  `        DB=merge3(window.__CLEAN__,DB,j.doc);
+        window.__CLEAN__=JSON.stringify(DB);`,
+  `        DB=merge3(window.__CLEAN__,DB,j.doc);applyTomb();
+        window.__CLEAN__=JSON.stringify(DB);`,
+  1
+);
+rep(
+  `            (L[k]||[]).forEach(function(x){if(!x||!x.id)return;`,
+  `            (L[k]||[]).forEach(function(x){if(!x||!x.id)return;
+              if(res.deletedIds&&res.deletedIds[x.id])return; /* centrally deleted — not rescueable */`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

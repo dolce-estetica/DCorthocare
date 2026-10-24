@@ -1184,5 +1184,15 @@ rep(
   1
 );
 
+/* ---- 31. physiotherapists see the whole queue board. The waiting column's
+   "my own patients" filter applies to doctor-type logins, and physios were
+   getting role 'doctor' — so a physio's board looked empty while patients
+   waited, which read as broken. The filter stays for doctors only. ---- */
+rep(
+  `  const mine=USER.role==='doctor';`,
+  `  const mine=USER.role==='doctor'&&USER.kind!=='physio';`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

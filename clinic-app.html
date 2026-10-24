@@ -1833,7 +1833,7 @@ function myDoctorId(){
 /* ================= QUEUE BOARD ================= */
 VIEWS.queue=function(){
   const vs=todayVisits().sort((a,b)=>a.token-b.token);
-  const mine=USER.role==='doctor';
+  const mine=USER.role==='doctor'&&USER.kind!=='physio';
   const list=st=>vs.filter(v=>v.status===st&&(!mine||st!=='waiting'||!v.doctorId||v.doctorId===USER.id));
   const waiting=list('waiting'),withdoc=vs.filter(v=>v.status==='with_doctor'),
         withphys=vs.filter(v=>v.status==='with_physio'),

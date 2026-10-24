@@ -650,7 +650,7 @@ function nav(){
       const qn=v[0]==='queue'?queueCount():0;
       const badge=qn?'<span class="kb" style="background:var(--gold);color:#25200A;border:none;font-weight:800">'+qn+'</span>':
         (v[0]==='activity'&&unseenCount())?'<span class="kb" style="background:var(--gold);color:#25200A;border:none;font-weight:800">'+unseenCount()+'</span>':'';
-      return '<div class="navi'+(v[0]===CUR?' on':'')+'" data-v="'+v[0]+'"><span class="ic">'+v[2]+'</span>'+v[1]+badge+'</div>';}).join('')+(g[0]==='REVIEW'&&isOwner()?'<div class="navgrp">ADMIN</div><div class="navi" onclick="location.href=\'/admin\'"><span class="ic">📈</span>Admin Dashboard</div>':'');
+      return '<div class="navi'+(v[0]===CUR?' on':'')+'" data-v="'+v[0]+'"><span class="ic">'+v[2]+'</span>'+v[1]+badge+'</div>';}).join('')+(g[0]==='REVIEW'&&isOwner()?'<div class="navgrp">ADMIN</div><div class="navi" onclick="location.href=\'/admin\'"><span class="ic">📈</span>Accounts Dashboard</div>':'');
   }).join('');
   $$('#nav .navi').forEach(e=>e.onclick=()=>go(e.dataset.v));
   $('#who').innerHTML='<span class="dot"></span><div><b>'+esc(USER.name)+'</b><div style="font-size:10.5px;opacity:.75">'+
@@ -746,7 +746,8 @@ VIEWS.dash=function(){
   const series=days.map(d=>sum(receiptsIn(d,d),r=>r.amt));
   const mx=Math.max(1,...series);
   return{title:'Dashboard',sub:'Financial year '+s.fy+' · '+dmy(t),
-  actions:(can('queue')?'<button class="btn gold" onclick="newVisit()">＋ Register patient</button>':'')+
+  actions:(isOwner()?'<button class="btn gold" onclick="location.href=\'/admin\'">📊 Accounts &amp; Reports →</button>':'')+
+          (can('queue')?'<button class="btn gold" onclick="newVisit()">＋ Register patient</button>':'')+
           (can('bill')?'<button class="btn ghost" onclick="go(\'bill\')">＋ New Bill</button>':'')+
           (can('expenses')?'<button class="btn ghost" onclick="go(\'expenses\')">＋ Expense</button>':'')+
           '<button class="btn ghost" onclick="dayClose()">🔒 Day close</button>',

@@ -1170,5 +1170,19 @@ rep(
   1
 );
 
+/* ---- 30. make the Accounts Dashboard impossible to miss: a gold button on
+   the clinic's own Dashboard banner for the owner, and matching sidebar label. ---- */
+rep(
+  `  actions:(can('queue')?'<button class="btn gold" onclick="newVisit()">＋ Register patient</button>':'')+`,
+  `  actions:(isOwner()?'<button class="btn gold" onclick="location.href=\\'/admin\\'">📊 Accounts &amp; Reports →</button>':'')+
+          (can('queue')?'<button class="btn gold" onclick="newVisit()">＋ Register patient</button>':'')+`,
+  1
+);
+rep(
+  `<span class="ic">📈</span>Admin Dashboard</div>`,
+  `<span class="ic">📈</span>Accounts Dashboard</div>`,
+  1
+);
+
 fs.writeFileSync(OUT, html);
 console.log("clinic-app.html written:", html.length, "bytes");

@@ -32,3 +32,24 @@ export async function toggleUser(formData: FormData) {
   await prisma.user.update({ where: { id }, data: { active: !u.active } });
   revalidatePath("/users");
 }
+
+export async function updateUser(formData: FormData) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  if (session.user.role !== "ADMIN") redirect("/clinic");
+  const id = String(formData.get("id") || "");
+  const name = String(formData.get("name") || "").trim();
+  const role = String(formData.get("role") || "STAFF");
+  const password = String(formData.get("password") || "");
+  if (!id || !name || !["ADMIN", "DOCTOR", "PHYSIO", "STAFF"].includes(role)) return;
+  if (id === session.user.id) return; /* cannot edit your own sign-in here */
+  const data: { name: string; role: any; passwordHash?: string } = { name, role };
+  if (password) {
+    if (password.length < 6) return;
+    const bcrypt = (await import("bcryptjs")).default;
+    data.passwordHash = bcrypt.hashSync(password, 10);
+  }
+  await prisma.user.update({ where: { id }, data });
+  revalidatePath("/users");
+  redirect("/users");
+}
